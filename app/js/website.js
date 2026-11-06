@@ -43,6 +43,7 @@ export function websiteHTML(state, D) {
 <style>
 :root{--primary:${p.primary};--accent:${p.accent};--bg:${p.bg};--ink:${p.ink};--line:#dbe4ee;--grid:${p.accent}1a}
 *{box-sizing:border-box}html{-webkit-text-size-adjust:100%}
+p,li{text-wrap:pretty}h1,h2{text-wrap:balance}
 body{margin:0;font-family:"PingFang TC","Noto Sans TC","Microsoft JhengHei",system-ui,sans-serif;color:var(--ink);background:#fff;line-height:1.75}
 .wrap{max-width:960px;margin:0 auto;padding:0 20px}
 header.nav{display:flex;justify-content:space-between;align-items:center;padding:16px 20px;max-width:960px;margin:0 auto}
@@ -50,7 +51,7 @@ header.nav b{color:var(--primary);font-size:18px}header.nav a{color:var(--ink);t
 .hero{padding:64px 24px}.hero h1{font-size:clamp(34px,7vw,56px);line-height:1.2;margin:0 0 12px;color:var(--primary);letter-spacing:.02em}
 .hero p.lead{font-size:18px;margin:0 0 8px}.hero p.slogan{font-size:20px;font-weight:700;margin:16px 0 28px}
 .mark{width:72px;height:72px;border-radius:50%;display:grid;place-items:center;background:var(--primary);color:#fff;font-size:34px;font-weight:700}
-.mark.photo{object-fit:cover}.mark.big{width:132px;height:132px}
+.mark.photo{object-fit:cover;object-position:50% 20%;border-radius:14px;width:120px;height:150px;background:none}.mark.big{width:200px;height:250px}
 .btn{display:inline-flex;align-items:center;min-height:48px;padding:0 22px;border-radius:999px;background:var(--primary);color:#fff;text-decoration:none;font-weight:700;margin:6px}
 .btn.ghost{background:#fff;color:var(--primary);border:1.5px solid var(--primary)}
 section{padding:48px 0}h2{font-size:26px;margin:0 0 20px}

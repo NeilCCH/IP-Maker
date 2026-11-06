@@ -29,7 +29,7 @@ export function render(root) {
   ${DESIGNS.map((d, i) => {
     const on = s.selectedDesignId === d.id;
     return `<article class="card proposal ${on ? 'is-selected' : ''}">
-      <canvas data-board="${d.id}" width="900" height="960" role="img" aria-label="${esc(d.name)}風格提案：歡迎圖卡、圖文選單、頭像與貼文"></canvas>
+      <canvas data-board="${d.id}" width="900" height="1240" role="img" aria-label="${esc(d.name)}風格提案：歡迎圖卡、圖文選單、頭像與貼文"></canvas>
       <div class="proposal-body">
         <h2>${String(i + 1).padStart(2, '0')} ${esc(d.name)}</h2>
         <p class="tagline">${esc(d.tag)}</p>

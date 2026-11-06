@@ -104,12 +104,25 @@ function fit(ctx, text, weight, size, min, maxW) {
   return s;
 }
 
+/** 平均斷行：維持相同行數，但讓每行長度接近，避免最後一行只剩一兩個字 */
+export function balancedWrap(ctx, text, maxW, maxLines = 99) {
+  const base = wrap(ctx, text, maxW, maxLines);
+  if (base.length < 2 || /…$/.test(base[base.length - 1])) return base;
+  let lo = maxW * 0.5, hi = maxW;
+  for (let i = 0; i < 12; i++) {
+    const mid = (lo + hi) / 2;
+    if (wrap(ctx, text, mid, 99).length <= base.length) hi = mid;
+    else lo = mid;
+  }
+  return wrap(ctx, text, hi, maxLines);
+}
+
 function textBlock(ctx, text, { x, y, maxW, size, weight = 400, color, lineH = 1.5, maxLines = 99, align = 'left' }) {
   ctx.font = font(weight, size);
   ctx.fillStyle = color;
   ctx.textAlign = align;
   ctx.textBaseline = 'alphabetic';
-  const lines = wrap(ctx, text, maxW, maxLines);
+  const lines = balancedWrap(ctx, text, maxW, maxLines);
   lines.forEach((l, i) => ctx.fillText(l, x, y + i * size * lineH));
   return y + lines.length * size * lineH;
 }
@@ -128,10 +141,20 @@ export function loadImage(src) {
   return p;
 }
 
-function drawCover(ctx, img, x, y, w, h) {
+/** 填滿區塊的裁切；fy 為垂直對焦點（0 = 頂端），人像預設對準上方臉部 */
+function drawCover(ctx, img, x, y, w, h, fy = 0.2) {
   const s = Math.max(w / img.width, h / img.height);
   const iw = img.width * s, ih = img.height * s;
-  ctx.drawImage(img, x + (w - iw) / 2, y + (h - ih) / 2, iw, ih);
+  ctx.drawImage(img, x + (w - iw) / 2, y + (h - ih) * fy, iw, ih);
+}
+
+/** 照片區塊：圓角（或直角）、不加外框線 */
+function photoBox(ctx, img, x, y, w, h, r = 0) {
+  ctx.save();
+  rr(ctx, x, y, w, h, r);
+  ctx.clip();
+  drawCover(ctx, img, x, y, w, h);
+  ctx.restore();
 }
 
 // ---------- 風格背景與元件 ----------
@@ -195,12 +218,8 @@ function mark(ctx, D, cx, cy, r) {
   const { primary, accent, bg } = D.palette;
   ctx.save();
   if (D.photoImg && D.photoMode !== 'none') {
-    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.clip();
-    drawCover(ctx, D.photoImg, cx - r, cy - r, r * 2, r * 2);
     ctx.restore();
-    ctx.strokeStyle = D.design.id === 'minimal' ? primary : accent;
-    ctx.lineWidth = Math.max(2, r * 0.05);
-    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
+    photoBox(ctx, D.photoImg, cx - r, cy - r, r * 2, r * 2, D.design.id === 'minimal' ? r * 0.12 : r * 0.3);
     return;
   }
   ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2);
@@ -244,23 +263,67 @@ export function avatar(ctx, W, H, D) {
 }
 
 /** 品牌主視覺卡（LINE 歡迎圖卡、提案板共用） */
+/** 有照片時：左邊文字、右邊直式照片，兩區不重疊 */
+function welcomeSplit(ctx, W, H, D) {
+  const { primary, accent, ink } = D.palette;
+  const k = W / 1040, sp = space(D), d = D.design.id;
+  background(ctx, W, H, D);
+  const pw = Math.round(W * (D.photoMode === 'hero' ? 0.46 : 0.38));
+  const m = d === 'minimal' ? 0 : 56 * k;
+  const px = W - pw - m, py = m, ph = H - 2 * m;
+  if (d === 'friendly') {
+    ctx.fillStyle = '#ffffff'; rr(ctx, 40 * k, 40 * k, W - 80 * k, H - 80 * k, 56 * k); ctx.fill();
+  }
+  photoBox(ctx, D.photoImg, px, py, pw, ph, d === 'minimal' ? 0 : d === 'friendly' ? 40 * k : 14 * k);
+  if (d === 'tech') {
+    ctx.strokeStyle = accent; ctx.lineWidth = 5 * k;
+    ctx.beginPath(); ctx.moveTo(px - 24 * k, py + ph - 110 * k); ctx.lineTo(px - 24 * k, py + ph + 24 * k - 24 * k); ctx.lineTo(px + 86 * k, py + ph); ctx.stroke();
+  }
+  const x = (d === 'friendly' ? 96 : 84) * k;
+  const maxW = px - x - 56 * k;
+  // 量測整塊文字高度後垂直置中
+  let nSize = fit(ctx, D.titleName, 700, 124 * k, 72 * k, maxW);
+  ctx.font = font(700, nSize);
+  const nameLines = balancedWrap(ctx, D.titleName, maxW, 2);
+  if (nameLines.length > 1) nSize = Math.min(nSize, 80 * k);
+  const posSize = 46 * k, sloSize = 54 * k;
+  ctx.font = font(500, posSize);
+  const posLines = balancedWrap(ctx, D.positioning, maxW, 3).length;
+  ctx.font = font(700, sloSize);
+  const sloLines = D.slogan ? balancedWrap(ctx, D.slogan, maxW, 3).length : 0;
+  const gap = 40 * k * sp;
+  const blockH = nameLines.length * nSize * 1.2 + gap + posLines * posSize * 1.5 + (sloLines ? gap * 1.6 + sloLines * sloSize * 1.4 : 0);
+  let y = Math.max(120 * k, (H - blockH) / 2) + nSize * 0.9;
+  if (d === 'minimal') { ctx.fillStyle = primary; ctx.fillRect(x - 40 * k, y - nSize * 0.9, 10 * k, blockH); }
+  y = textBlock(ctx, D.titleName, { x, y, maxW, size: nSize, weight: 700, color: primary, lineH: 1.2, maxLines: 2 }) - nSize * 0.2 + gap;
+  y = textBlock(ctx, D.positioning, { x, y: y + posSize * 0.2, maxW, size: posSize, weight: 500, color: ink, maxLines: 3 });
+  if (D.slogan) {
+    // y 是下一行的基線；上一行文字底部約在 y - 1.1 字高
+    const barY = y - posSize * 0.9 + gap * 0.8;
+    ctx.fillStyle = d === 'minimal' ? '#d7dee8' : accent;
+    ctx.fillRect(x, barY, d === 'minimal' ? maxW : 110 * k, (d === 'minimal' ? 3 : 7) * k);
+    textBlock(ctx, D.slogan, { x, y: barY + gap * 0.8 + sloSize * 0.9, maxW, size: sloSize, weight: 700, color: ink, lineH: 1.4, maxLines: 3 });
+  }
+  textBlock(ctx, '從下方選單開始，或直接留言', { x, y: H - (d === 'minimal' ? 80 : 110) * k, maxW, size: 30 * k, color: '#5b6b80', maxLines: 1 });
+}
+
 export function welcomeCard(ctx, W, H, D) {
+  if (D.photoImg && D.photoMode !== 'none') return welcomeSplit(ctx, W, H, D);
   const { primary, accent, ink } = D.palette;
   const k = W / 1040, sp = space(D);
   background(ctx, W, H, D);
   const d = D.design.id;
-  const hero = D.photoMode === 'hero';
+  const hero = false;
   if (d === 'minimal') {
     const x = 90 * k;
     ctx.fillStyle = primary; ctx.fillRect(x - 40 * k, 150 * k, 10 * k, 520 * k);
-    if (D.photoImg && D.photoMode !== 'none') mark(ctx, D, W - 210 * k, 230 * k, (hero ? 140 : 90) * k);
     ctx.textAlign = 'left';
-    const s = fit(ctx, D.titleName, 700, 150 * k, 60 * k, W - 2 * x - (hero ? 300 * k : 0));
+    const s = fit(ctx, D.titleName, 700, 150 * k, 60 * k, W - 2 * x);
     ctx.fillStyle = primary; ctx.fillText(D.titleName, x, 330 * k);
-    let y = textBlock(ctx, D.positioning, { x, y: 330 * k + s * 0.7 * sp, maxW: W - 2 * x, size: 44 * k, weight: 500, color: ink, maxLines: 2 });
-    ctx.fillStyle = '#d7dee8'; ctx.fillRect(x, y + 20 * k * sp, W - 2 * x, 3 * k);
-    if (D.slogan) textBlock(ctx, D.slogan, { x, y: y + 110 * k * sp, maxW: W - 2 * x, size: 52 * k, weight: 700, color: ink, maxLines: 2 });
-    textBlock(ctx, '從下方選單開始，或直接留言', { x, y: H - 110 * k, maxW: W - 2 * x, size: 32 * k, color: '#5b6b80' });
+    let y = textBlock(ctx, D.positioning, { x, y: 330 * k + s * 0.75 * sp, maxW: W - 2 * x, size: 54 * k, weight: 500, color: ink, maxLines: 2 });
+    ctx.fillStyle = '#d7dee8'; ctx.fillRect(x, y + 10 * k * sp, W - 2 * x, 3 * k);
+    if (D.slogan) textBlock(ctx, D.slogan, { x, y: y + 110 * k * sp, maxW: W - 2 * x, size: 60 * k, weight: 700, color: ink, lineH: 1.4, maxLines: 2 });
+    textBlock(ctx, '從下方選單開始，或直接留言', { x, y: H - 110 * k, maxW: W - 2 * x, size: 34 * k, color: '#5b6b80' });
     return;
   }
   // tech / friendly：置中卡片
@@ -282,9 +345,9 @@ export function welcomeCard(ctx, W, H, D) {
   ctx.textAlign = 'center';
   fit(ctx, D.titleName, 700, (hero ? 120 : 150) * k, 56 * k, pw - 100 * k);
   ctx.fillStyle = primary; ctx.fillText(D.titleName, cx, y);
-  y = textBlock(ctx, D.positioning, { x: cx, y: y + 80 * k * sp, maxW: pw - 120 * k, size: 42 * k, weight: 500, color: ink, maxLines: 2, align: 'center' });
+  y = textBlock(ctx, D.positioning, { x: cx, y: y + 90 * k * sp, maxW: pw - 120 * k, size: 52 * k, weight: 500, color: ink, maxLines: 2, align: 'center' });
   ctx.fillStyle = accent; rr(ctx, cx - 70 * k, y + 4 * k * sp, 140 * k, 7 * k, 4 * k); ctx.fill();
-  if (D.slogan) textBlock(ctx, D.slogan, { x: cx, y: y + 92 * k * sp, maxW: pw - 120 * k, size: 50 * k, weight: 700, color: ink, maxLines: 2, align: 'center' });
+  if (D.slogan) textBlock(ctx, D.slogan, { x: cx, y: y + 100 * k * sp, maxW: pw - 120 * k, size: 58 * k, weight: 700, color: ink, lineH: 1.4, maxLines: 2, align: 'center' });
 }
 
 export function richMenu(ctx, W, H, D, line, p) {
@@ -324,15 +387,15 @@ export function richMenu(ctx, W, H, D, line, p) {
       ctx.beginPath(); ctx.moveTo(c.x + c.w - 110, c.y + 30); ctx.lineTo(c.x + c.w - 30, c.y + 30); ctx.lineTo(c.x + c.w - 30, c.y + 110); ctx.stroke();
       drawIcon(ctx, icon, c.x + c.w / 2, c.y + c.h * 0.4, Math.min(c.w, c.h) * 0.36, primary, 1.4);
       ctx.textAlign = 'center';
-      fit(ctx, label, 700, 76, 44, c.w - 70);
+      fit(ctx, label, 700, 92, 48, c.w - 70);
       ctx.fillStyle = ink; ctx.fillText(label, c.x + c.w / 2, c.y + c.h * 0.8);
     } else if (d === 'minimal') {
       ctx.strokeStyle = '#e2e8f0'; ctx.lineWidth = 3;
       ctx.beginPath(); ctx.moveTo(c.x + c.w, c.y + 40); ctx.lineTo(c.x + c.w, c.y + c.h - 40); ctx.moveTo(c.x + 40, c.y + c.h); ctx.lineTo(c.x + c.w - 40, c.y + c.h); ctx.stroke();
       const pad = Math.min(80, c.w * 0.12);
-      drawIcon(ctx, icon, c.x + pad + 60, c.y + c.h * 0.32, 120, primary, 1.6);
+      drawIcon(ctx, icon, c.x + pad + 75, c.y + c.h * 0.32, 150, primary, 1.5);
       ctx.textAlign = 'left';
-      fit(ctx, label, 700, 84, 44, c.w - pad * 2);
+      fit(ctx, label, 700, 96, 48, c.w - pad * 2);
       ctx.fillStyle = ink; ctx.fillText(label, c.x + pad, c.y + c.h * 0.75);
       ctx.fillStyle = accent; ctx.fillRect(c.x + pad, c.y + c.h * 0.75 + 34, 70, 8);
     } else {
@@ -342,7 +405,7 @@ export function richMenu(ctx, W, H, D, line, p) {
       ctx.fillStyle = bg; ctx.beginPath(); ctx.arc(c.x + c.w / 2, c.y + c.h * 0.4, r, 0, Math.PI * 2); ctx.fill();
       drawIcon(ctx, icon, c.x + c.w / 2, c.y + c.h * 0.4, r * 1.15, primary, 1.5);
       ctx.textAlign = 'center';
-      fit(ctx, label, 600, 72, 42, c.w - 90);
+      fit(ctx, label, 700, 88, 46, c.w - 90);
       ctx.fillStyle = ink; ctx.fillText(label, c.x + c.w / 2, c.y + c.h * 0.8);
     }
   });
@@ -371,23 +434,35 @@ export function clickMap(ctx, W, H, D, line, p) {
 }
 
 export function cover(ctx, W, H, D) {
-  const { primary, accent, ink } = D.palette;
+  const { primary, ink } = D.palette;
   background(ctx, W, H, D);
-  const safeW = Math.min(W, H * 1.78);
+  const safeW = Math.min(W, H * 1.78); // 手機版會裁掉左右，重點放在中間安全區
   const sx = (W - safeW) / 2;
   const k = H / 624, sp = space(D);
   const hasPhoto = D.photoImg && D.photoMode !== 'none';
   const d = D.design.id;
-  if (hasPhoto) mark(ctx, D, sx + safeW - 210 * k, H / 2, (D.photoMode === 'hero' ? 170 : 120) * k);
-  const textW = safeW - (hasPhoto ? 480 * k : 160 * k);
+  let textRight = sx + safeW - 90 * k;
+  if (hasPhoto) {
+    const pw = Math.round(H * (D.photoMode === 'hero' ? 0.95 : 0.78));
+    const m = d === 'minimal' ? 0 : 36 * k;
+    const px = sx + safeW - pw - m;
+    photoBox(ctx, D.photoImg, px, m, pw, H - 2 * m, d === 'minimal' ? 0 : d === 'friendly' ? 32 * k : 12 * k);
+    textRight = px - 56 * k;
+  }
   const left = d === 'minimal' || hasPhoto;
-  const x = left ? sx + 90 * k : W / 2;
-  ctx.textAlign = left ? 'left' : 'center';
-  if (d === 'minimal') { ctx.fillStyle = primary; ctx.fillRect(sx + 50 * k, H * 0.25, 8 * k, H * 0.5); }
-  fit(ctx, D.titleName, 700, 120 * k, 50 * k, textW);
-  ctx.fillStyle = primary; ctx.fillText(D.titleName, x, H * 0.43);
-  const y = textBlock(ctx, D.positioning, { x, y: H * 0.43 + 76 * k * sp, maxW: textW, size: 40 * k, weight: 500, color: ink, maxLines: 1, align: left ? 'left' : 'center' });
-  if (D.slogan) textBlock(ctx, D.slogan, { x, y: y + 30 * k * sp, maxW: textW, size: 38 * k, color: '#475569', maxLines: 1, align: left ? 'left' : 'center' });
+  const x0 = sx + 90 * k;
+  const textW = left ? textRight - x0 : safeW - 180 * k;
+  const x = left ? x0 : W / 2;
+  const align = left ? 'left' : 'center';
+  const nSize = fit(ctx, D.titleName, 700, 120 * k, 56 * k, textW);
+  const posSize = 42 * k, sloSize = 40 * k;
+  const blockH = nSize + 28 * k * sp + posSize * 1.5 + (D.slogan ? 18 * k * sp + sloSize * 1.5 : 0);
+  let y = (H - blockH) / 2 + nSize * 0.85;
+  if (d === 'minimal') { ctx.fillStyle = primary; ctx.fillRect(x0 - 40 * k, y - nSize * 0.85, 8 * k, blockH); }
+  ctx.textAlign = align; ctx.font = font(700, nSize); ctx.fillStyle = primary;
+  ctx.fillText(D.titleName, x, y);
+  y = textBlock(ctx, D.positioning, { x, y: y + nSize * 0.25 + 28 * k * sp + posSize * 0.8, maxW: textW, size: posSize, weight: 500, color: ink, maxLines: 1, align });
+  if (D.slogan) textBlock(ctx, D.slogan, { x, y: y + 18 * k * sp, maxW: textW, size: sloSize, weight: 500, color: '#475569', maxLines: 1, align });
 }
 
 function header(ctx, W, D, k) {
@@ -507,12 +582,17 @@ export function proposalBoard(ctx, W, H, D, line) {
   const rm = sub(2500, 1686, (c, w, h) => richMenu(c, w, h, D, line, 0));
   const ps = sub(1080, 1350, (c, w, h) => post(c, w, h, D, { tag: '範例', title: '貼文版型示意', points: ['重點一', '重點二', '重點三'] }));
   const av = sub(640, 640, (c, w, h) => avatar(c, w, h, D));
-  const colW = 520 * k;
-  ctx.drawImage(wc, 30 * k, 30 * k, colW, colW);
-  ctx.drawImage(rm, 30 * k, 30 * k + colW + 16 * k, colW, colW * (1686 / 2500));
-  const rx = 30 * k + colW + 24 * k, rw = W - rx - 30 * k;
-  ctx.save(); ctx.beginPath(); ctx.arc(rx + rw / 2, 30 * k + rw / 2, rw / 2, 0, Math.PI * 2); ctx.clip(); ctx.drawImage(av, rx, 30 * k, rw, rw); ctx.restore();
-  ctx.drawImage(ps, rx, 30 * k + rw + 24 * k, rw, rw * 1.25);
+  const m = 30 * k, gap = 20 * k;
+  const rw = 260 * k;
+  const cw = W - 2 * m - gap - rw;
+  const card = (img, x, y, w, h, r = 12 * k) => { ctx.save(); rr(ctx, x, y, w, h, r); ctx.clip(); ctx.drawImage(img, x, y, w, h); ctx.restore(); };
+  card(wc, m, m, cw, cw);
+  const rx = m + cw + gap;
+  card(av, rx, m, rw, rw, rw * 0.16);
+  card(ps, rx, m + rw + gap, rw, rw * 1.25);
+  const top = m + Math.max(cw, rw * 2.25 + gap) + gap;
+  const rmW = W - 2 * m;
+  card(rm, m, top, rmW, rmW * (1686 / 2500));
 }
 
 export const ENTRY_COUNT = (line) => line.pages * line.count;
