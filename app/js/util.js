@@ -28,6 +28,10 @@ export function hash(s) {
   return (h >>> 0).toString(36);
 }
 
+/** 今天日期 YYYY-MM-DD，用於檔名 */
+export const today = () => new Date().toISOString().slice(0, 10);
+
+/** 下載檔名一律用英文、數字與「-」：部分瀏覽器遇到中文檔名會改成「download」 */
 export function download(name, data, type = 'application/octet-stream') {
   const blob = data instanceof Blob ? data : new Blob([data], { type });
   const url = URL.createObjectURL(blob);
@@ -36,8 +40,11 @@ export function download(name, data, type = 'application/octet-stream') {
   a.download = name;
   document.body.append(a);
   a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 2000);
+  // 連結與網址延後移除，避免瀏覽器還沒讀到檔名就被清掉（檔名會變成「download」）
+  setTimeout(() => {
+    a.remove();
+    URL.revokeObjectURL(url);
+  }, 4000);
 }
 
 let toastTimer;

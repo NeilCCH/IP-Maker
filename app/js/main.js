@@ -1,6 +1,7 @@
 // 入口：路由、事件委派、PWA 安裝與更新
 import { store, setRenderer, save } from './store.js';
 import { toast } from './util.js';
+import { cloudBackup, notifyBackup, backupStatus } from './backup.js';
 import * as home from './views/home.js';
 import * as profile from './views/profile.js';
 import * as design from './views/design.js';
@@ -28,6 +29,7 @@ function render() {
     a.setAttribute('aria-current', STEP_OF[name] === n ? 'step' : 'false');
   });
   document.querySelector('.adv-link')?.setAttribute('aria-current', name === 'advanced' ? 'page' : 'false');
+  updateCloudBtn();
   if (key !== lastRoute) {
     // 換頁：移到頂端並把焦點放在標題（螢幕閱讀器）
     window.scrollTo(0, 0);
@@ -47,6 +49,7 @@ document.addEventListener('click', async (e) => {
   const act = el.dataset.action;
   if (act === 'close-dialog') return el.closest('dialog').close();
   if (act === 'install') return install();
+  if (act === 'cloud-backup') return backupNow(el);
   if (act === 'apply-update') return applyUpdate();
   const handled = await current().onAction?.(act, el, e);
   if (handled && el.tagName === 'A') e.preventDefault();
@@ -55,6 +58,33 @@ document.addEventListener('click', async (e) => {
 document.addEventListener('input', (e) => current().onInput?.(e.target, e));
 document.addEventListener('change', (e) => current().onChange?.(e.target, e));
 window.addEventListener('hashchange', render);
+
+// ---------- 備份到雲端 ----------
+function updateCloudBtn() {
+  const st = backupStatus(store.state);
+  const btn = document.getElementById('cloudBtn');
+  if (!btn) return;
+  btn.querySelector('.dot').hidden = !st.due;
+  btn.title = st.text;
+  document.getElementById('cloudHint').textContent = st.text + (st.due ? '，建議現在備份' : '');
+}
+
+async function backupNow(btn) {
+  btn.disabled = true;
+  try {
+    const result = await cloudBackup(store.state);
+    if (result !== 'cancelled') {
+      store.state.meta.lastBackupAt = new Date().toISOString();
+      save();
+      render();
+    }
+    notifyBackup(result);
+  } catch {
+    toast('備份失敗，請到「進階工具」用「匯出進度」');
+  } finally {
+    btn.disabled = false;
+  }
+}
 
 // ---------- PWA ----------
 let installEvent;

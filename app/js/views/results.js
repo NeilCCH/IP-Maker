@@ -9,7 +9,7 @@ import { websiteHTML } from '../website.js';
 import { prepare, assetBlob, platformZip, textsTxt, guideDynamic, replyList } from '../export.js';
 import { ENTRY_TYPES, TYPE_NAME, replyValue, generateReply, formScript, formManual, formEntries, parseFormResult, LINE_REPLY_MAX } from '../entries.js';
 import { store, commit, save } from '../store.js';
-import { esc, toast, download, copyText, hash, safeURL, charLen } from '../util.js';
+import { esc, toast, download, copyText, hash, safeURL, charLen, today } from '../util.js';
 import { icon, badge, paintAssets, assetFigure } from './common.js';
 
 const S = () => store.state;
@@ -283,9 +283,9 @@ export async function onAction(act, el) {
       return true;
     }
     case 'dl-zip':
-      busy(el, async () => download(`${derive(s).titleName}-${PLATFORM_BY_ID[el.dataset.p].name}-素材包.zip`, await platformZip(s, el.dataset.p)));
+      busy(el, async () => download(`${el.dataset.p.toLowerCase()}-assets-${today()}.zip`, await platformZip(s, el.dataset.p)));
       return true;
-    case 'dl-text': download(`${PLATFORM_BY_ID[el.dataset.p].name}-文案.txt`, textsTxt(s, derive(s), el.dataset.p), 'text/plain;charset=utf-8'); return true;
+    case 'dl-text': download(`${el.dataset.p.toLowerCase()}-copy.txt`, textsTxt(s, derive(s), el.dataset.p), 'text/plain;charset=utf-8'); return true;
     case 'dl-config': download('line-richmenu-config.json', JSON.stringify(richMenuConfig(L, derive(s).titleName), null, 2), 'application/json'); return true;
     case 'dl-html': {
       const D = derive(s);
@@ -293,7 +293,7 @@ export async function onAction(act, el) {
       return true;
     }
     case 'prompt-copy': { const t = document.getElementById('promptOut'); copyText(t.value, t); return true; }
-    case 'prompt-dl': download(`${PLATFORM_BY_ID[el.dataset.p].name}-提示詞.txt`, document.getElementById('promptOut').value, 'text/plain;charset=utf-8'); return true;
+    case 'prompt-dl': download(`${el.dataset.p.toLowerCase()}-prompt.txt`, document.getElementById('promptOut').value, 'text/plain;charset=utf-8'); return true;
     case 'prompt-regen': Object.assign(s.platforms[el.dataset.p].prompt, { draft: '', basis: '' }); commit(); toast('已重新生成提示詞'); return true;
     case 'prompt-keep': { const pr = s.platforms[el.dataset.p].prompt; pr.basis = hash(buildPrompt(s, derive(s), el.dataset.p, pr.extra)); commit(); return true; }
     default: return false;

@@ -297,6 +297,35 @@ const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'brand-e2e-'));
     assert((await state()).platforms.lineOA.entries[0].type === 'link', '切換入口功能失敗');
   });
 
+  await test('備份到雲端：支援分享時送出備份檔；不支援時改為下載；記錄備份時間', async () => {
+    await go('#/advanced');
+    assert(await page.isVisible('#cloudBtn .dot'), '從未備份時沒有提醒紅點');
+    const [dl] = await Promise.all([page.waitForEvent('download'), page.click('#cloudBtn')]);
+    assert(/^brand-backup-\d{4}-\d{2}-\d{2}\.json$/.test(dl.suggestedFilename()), `檔名錯誤 ${dl.suggestedFilename()}`);
+    const f = path.join(TMP, 'cloud.json');
+    await dl.saveAs(f);
+    const data = JSON.parse(fs.readFileSync(f, 'utf8'));
+    assert(data.schemaVersion === 2 && data.identity, '備份檔內容不完整');
+    await page.waitForTimeout(200);
+    assert((await state()).meta.lastBackupAt, '沒有記錄備份時間');
+    assert(!(await page.isVisible('#cloudBtn .dot')), '備份後紅點沒有消失');
+    // 模擬手機的分享選單
+    const c2 = await browser.newContext();
+    await c2.addInitScript(() => {
+      window.__shared = null;
+      navigator.canShare = (d) => !!d?.files?.length;
+      navigator.share = async (d) => { window.__shared = { name: d.files[0].name, size: d.files[0].size }; };
+    });
+    const p2 = await c2.newPage();
+    await p2.goto(BASE + '#/advanced');
+    await p2.waitForTimeout(300);
+    await p2.click('#cloudBtn');
+    await p2.waitForTimeout(300);
+    const shared = await p2.evaluate(() => window.__shared);
+    assert(shared && shared.size > 100 && shared.name.endsWith('.json'), '沒有透過分享送出備份檔');
+    await c2.close();
+  });
+
   console.log('產出與安裝');
   const zips = {};
   await test('五平台素材包 ZIP 可下載並通過完整性檢查', async () => {

@@ -339,3 +339,9 @@ button.pick:hover { border-color: var(--c-primary); }
 .reply-list .rp { display: grid; gap: 6px; }
 .reply-list .rp .pre { background: var(--c-bg); border-radius: 8px; padding: var(--s3); margin: 0; font-size: 15px; }
 .reply-list .rp .btn { justify-self: start; }
+
+/* 備份到雲端 */
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.cloud-btn { position: relative; }
+.cloud-btn .dot { position: absolute; top: 6px; right: 8px; width: 9px; height: 9px; border-radius: 50%; background: var(--c-danger); box-shadow: 0 0 0 2px #fff; }
+@media (max-width: 520px) { .cloud-btn span { font-size: 13px; } .cloud-btn { padding: 0 12px; } }
