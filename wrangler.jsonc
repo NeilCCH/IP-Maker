@@ -1,0 +1,8 @@
+// Cloudflare Workers 靜態網站設定：只發佈 app 資料夾（PWA 本體）
+{
+  "name": "ip-maker",
+  "compatibility_date": "2025-09-01",
+  "assets": {
+    "directory": "./app"
+  }
+}

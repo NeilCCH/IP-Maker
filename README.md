@@ -63,11 +63,11 @@ node tests/e2e.test.js
 
 ## 部署（免費）
 
-建議 **Cloudflare Pages**（免費方案，不需登入即可開啟網址，支援自訂網域）：
+目前部署在 **Cloudflare Workers**（免費方案），repo 根目錄的 `wrangler.jsonc` 指定只發佈 `app` 資料夾。
 
-1. Cloudflare 後台 → Workers & Pages → 建立 → Pages → 連接 GitHub，選這個 repo。
-2. Build command 留空；Build output directory 填 `app`。
-3. 部署後取得 `*.pages.dev` 網址，分享給試辦小組，用手機開啟後「加入主畫面」。
+1. Cloudflare 後台 → Workers 和 Pages → 建立 → 匯入 GitHub repo `NeilCCH/IP-Maker`（已完成，Worker 名稱 `ip-maker`）。
+2. 到 `ip-maker` →「設定」→「網域和路由」→ 啟用 `workers.dev`，就會得到 `ip-maker.<帳號子網域>.workers.dev` 網址。
+3. 之後每次推送到部署分支，Cloudflare 會自動重新部署。
 
 `app/_headers` 已設定 `sw.js` 與 `index.html` 不快取，確保更新能被偵測到。
 
