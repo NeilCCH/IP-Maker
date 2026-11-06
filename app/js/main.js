@@ -7,8 +7,10 @@ import * as profile from './views/profile.js';
 import * as design from './views/design.js';
 import * as results from './views/results.js';
 import * as advanced from './views/advanced.js';
+import * as admin from './views/admin.js';
+import { checkAccess, logout, adminUsers } from './auth.js';
 
-const VIEWS = { '': home, profile, design, results, advanced };
+const VIEWS = { '': home, profile, design, results, advanced, admin };
 const STEP_OF = { profile: 1, design: 2, results: 3 };
 const main = document.getElementById('main');
 
@@ -29,6 +31,7 @@ function render() {
     a.setAttribute('aria-current', STEP_OF[name] === n ? 'step' : 'false');
   });
   document.querySelector('.adv-link')?.setAttribute('aria-current', name === 'advanced' ? 'page' : 'false');
+  document.getElementById('adminLink')?.setAttribute('aria-current', name === 'admin' ? 'page' : 'false');
   updateCloudBtn();
   if (key !== lastRoute) {
     // 換頁：移到頂端並把焦點放在標題（螢幕閱讀器）
@@ -50,6 +53,7 @@ document.addEventListener('click', async (e) => {
   if (act === 'close-dialog') return el.closest('dialog').close();
   if (act === 'install') return install();
   if (act === 'cloud-backup') return backupNow(el);
+  if (act === 'logout') return confirm('確定登出？這台裝置上的品牌資料會保留。') && logout();
   if (act === 'apply-update') return applyUpdate();
   const handled = await current().onAction?.(act, el, e);
   if (handled && el.tagName === 'A') e.preventDefault();
@@ -131,4 +135,21 @@ window.addEventListener('offline', () => toast('目前離線：仍可繼續編�
 
 render();
 save();
+
+// 帳號：顯示登入者；管理者顯示「管理」與待審核數量
+checkAccess().then(async (me) => {
+  if (!me) return;
+  document.getElementById('userName').textContent = me.profile?.name || me.email;
+  document.getElementById('userChip').hidden = false;
+  if (me.isAdmin) {
+    document.getElementById('adminLink').hidden = false;
+    try {
+      const n = ((await adminUsers()).users || []).filter((u) => u.status === 'pending').length;
+      const b = document.getElementById('adminBadge');
+      b.textContent = n;
+      b.hidden = !n;
+    } catch { /* 取不到數量不影響使用 */ }
+  }
+  if (parse().name === 'admin') render();
+});
 if (store.migrated) toast('已從舊版展示版轉入你的進度');

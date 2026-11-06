@@ -24,6 +24,7 @@
   --ease: cubic-bezier(.2, .7, .3, 1);
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 html { -webkit-text-size-adjust: 100%; }
 body {
   margin: 0; font-family: var(--font); font-size: 16px; line-height: 1.6; color: var(--c-ink);
@@ -345,3 +346,26 @@ button.pick:hover { border-color: var(--c-primary); }
 .cloud-btn { position: relative; }
 .cloud-btn .dot { position: absolute; top: 6px; right: 8px; width: 9px; height: 9px; border-radius: 50%; background: var(--c-danger); box-shadow: 0 0 0 2px #fff; }
 @media (max-width: 520px) { .cloud-btn span { font-size: 13px; } .cloud-btn { padding: 0 12px; } }
+
+/* 帳號、申請與管理 */
+.user-chip { display: inline-flex; align-items: center; gap: 2px; font-size: 14px; color: var(--c-muted); }
+.user-chip #userName { max-width: 8em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.badge { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 6px; margin-left: 4px; border-radius: 99px; background: var(--c-danger); color: #fff; font-size: 12px; font-weight: 700; }
+.gate { max-width: 640px; }
+.gate-card { padding: var(--s5); }
+.gate-steps { list-style: none; padding: 0; margin: 0 0 var(--s5); display: grid; gap: var(--s3); counter-reset: g; }
+.gate-steps li { display: grid; grid-template-columns: 36px 1fr; gap: 2px var(--s3); align-items: center; counter-increment: g; }
+.gate-steps li::before { content: counter(g); grid-row: span 2; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: var(--c-primary); color: #fff; font-weight: 800; }
+.gate-steps span { color: var(--c-muted); font-size: 14px; }
+.gbtn { min-height: 44px; margin: var(--s3) 0; }
+.req { font-style: normal; font-size: 12px; color: var(--c-danger); margin-left: 4px; }
+.error { color: var(--c-danger); font-weight: 600; }
+input[readonly] { background: var(--c-bg); color: var(--c-muted); }
+.kv { display: grid; grid-template-columns: 5em 1fr; gap: 6px var(--s3); margin: var(--s3) 0; }
+.kv dt { color: var(--c-muted); }
+.kv dd { margin: 0; overflow-wrap: anywhere; }
+.user-list { list-style: none; padding: 0; margin: var(--s3) 0; display: grid; gap: var(--s3); }
+@media (min-width: 820px) { .user-list { grid-template-columns: 1fr 1fr; } }
+.user-list .card { margin: 0; }
+.u-head { display: flex; justify-content: space-between; align-items: center; gap: var(--s2); }
+.u-head b { font-size: 18px; }

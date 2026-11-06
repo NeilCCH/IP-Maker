@@ -1,0 +1,11 @@
+{
+  "name": "ip-maker",
+  "private": true,
+  "scripts": {
+    "test": "node tests/e2e.test.js && node tests/worker.test.js",
+    "dev": "wrangler dev"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}

@@ -73,6 +73,26 @@ node tests/e2e.test.js
 
 > 舊展示版的 ChatGPT Sites 設定（`.openai/hosting.json`）沒有搬進來，也沒有改動原站點。
 
+## 帳號申請與審核（門禁）
+
+- 同仁用 Google 帳號登入 → 填寫單位、事業部、職稱、姓名 → 管理者在 APP 的「管理」頁審核 → 通過後才能使用。
+- 管理者：`wrangler.jsonc` 的 `ADMIN_EMAILS`（目前為 neo0935@gmail.com），登入即自動通過。
+- 申請資料存在 Cloudflare Durable Object（SQLite，`worker/index.js` 的 `Registry`），部署時自動建立，不需另外建立資料庫。
+- 門禁在伺服器端：未通過審核的人拿不到 APP 的頁面與程式檔（`/gate/`、`/css/`、`/icons/`、`/api/` 為公開）。
+- **`GOOGLE_CLIENT_ID` 留白時門禁不啟用**，網站維持公開。填入 Google OAuth 用戶端 ID 並推送後即啟用。
+- 品牌問卷資料仍只存在使用者自己的裝置。
+- `ALLOW_TEST_LOGIN` 只供本機測試，**不可**寫進 `wrangler.jsonc` 或在 Cloudflare 後台設定。
+
+本機測試後台：
+
+```bash
+npm install
+```
+
+```bash
+node tests/worker.test.js
+```
+
 ## 目前限制
 
 - 資料只存在使用者的瀏覽器，不跨裝置同步；請用「進階工具」匯出備份。

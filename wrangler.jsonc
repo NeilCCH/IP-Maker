@@ -1,8 +1,21 @@
-// Cloudflare Workers 靜態網站設定：只發佈 app 資料夾（PWA 本體）
+// Cloudflare Workers 設定：app 資料夾是 PWA 本體；worker/index.js 負責登入、申請審核與門禁。
+// GOOGLE_CLIENT_ID 留白時門禁不啟用（網站維持公開）。填入 Google OAuth 用戶端 ID 後即啟用。
+// 注意：不要在這裡設定 ALLOW_TEST_LOGIN（只給本機測試用）。
 {
   "name": "ip-maker",
+  "main": "worker/index.js",
   "compatibility_date": "2025-09-01",
   "assets": {
-    "directory": "./app"
+    "directory": "./app",
+    "binding": "ASSETS",
+    "run_worker_first": true
+  },
+  "durable_objects": {
+    "bindings": [{ "name": "REGISTRY", "class_name": "Registry" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Registry"] }],
+  "vars": {
+    "ADMIN_EMAILS": "neo0935@gmail.com",
+    "GOOGLE_CLIENT_ID": ""
   }
 }

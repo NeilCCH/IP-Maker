@@ -418,7 +418,7 @@ const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'brand-e2e-'));
     const sw = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
     const listed = [...sw.matchAll(/'\.\/([^']+)'/g)].map((m) => m[1]);
     const walk = (d) => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(path.join(d, e.name)) : [path.relative(ROOT, path.join(d, e.name))]));
-    const files = walk(ROOT).filter((f) => !['sw.js', '_headers'].includes(f));
+    const files = walk(ROOT).filter((f) => !['sw.js', '_headers'].includes(f) && !f.startsWith('gate/'));
     const missing = files.filter((f) => !listed.includes(f));
     assert(!missing.length, `sw.js 未快取：${missing.join(', ')}`);
     for (const f of listed) assert(fs.existsSync(path.join(ROOT, f)), `sw.js 列了不存在的檔案 ${f}`);
