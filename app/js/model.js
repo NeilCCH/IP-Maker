@@ -25,7 +25,7 @@ export function fresh() {
   const s = {
     schemaVersion: SCHEMA_VERSION,
     app: 'brand-studio',
-    meta: { createdAt: now, updatedAt: now, qIndex: 0, started: false },
+    meta: { createdAt: now, updatedAt: now, qIndex: 0, started: false, target: 'lineOA' },
     answers: Object.fromEntries(QUESTIONS.map((q) => [q.id, []])),
     freeform: Object.fromEntries(QUESTIONS.map((q) => [q.id, ''])),
     resolutions: {},
@@ -94,6 +94,7 @@ export function sanitize(x) {
   n.meta.createdAt = str(x.meta?.createdAt, 40) || n.meta.createdAt;
   n.meta.qIndex = Math.min(QUESTIONS.length - 1, Math.max(0, Number(x.meta?.qIndex) || 0));
   n.meta.started = x.meta?.started === true;
+  n.meta.target = PLATFORM_IDS.includes(x.meta?.target) ? x.meta.target : 'lineOA';
   for (const q of QUESTIONS) {
     n.answers[q.id] = strArr(x.answers?.[q.id], q.max || 16, 40);
     n.freeform[q.id] = str(x.freeform?.[q.id], 3000);

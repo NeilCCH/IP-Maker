@@ -1,7 +1,7 @@
 // 素材輸出：PNG、文字、提示詞、設定檔、網頁，打包為各平台 ZIP。
 import { derive } from './brand.js';
 import { loadImage } from './draw.js';
-import { PLATFORMS, PLATFORM_BY_ID, assetsFor, statusOf } from './platforms.js';
+import { PLATFORMS, PLATFORM_BY_ID, assetsFor, statusOf, isReady } from './platforms.js';
 import { TEXT_FIELDS, textValue } from './copy.js';
 import { buildPrompt } from './prompt.js';
 import { richMenuBody, richMenuConfig, apiScript } from './line.js';
@@ -100,7 +100,7 @@ export async function platformZip(state, pid) {
 
 export async function allZip(state) {
   const files = [];
-  for (const P of PLATFORMS) files.push(...(await platformFiles(state, P.id)));
+  for (const P of PLATFORMS) if (isReady(P.id)) files.push(...(await platformFiles(state, P.id)));
   files.push({ name: '品牌進度備份.json', data: exportJSON(state) });
   files.push({ name: '讀我.txt', data: '這是你的個人品牌素材包。\n每個資料夾對應一個平台，裡面有圖片、文案、提示詞與設定引導。\n「品牌進度備份.json」可以在 APP 的「進階工具 → 匯入進度」還原。\n含有【待填】的地方，請換成你的真實資料再使用。' });
   return makeZip(files);

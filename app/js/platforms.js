@@ -136,6 +136,10 @@ export const PLATFORMS = [
 
 export const PLATFORM_BY_ID = Object.fromEntries(PLATFORMS.map((p) => [p.id, p]));
 
+/** 已開放的平台。其他平台功能保留在程式中，完成驗收後加進這裡就會開放。 */
+export const READY_PLATFORMS = ['lineOA'];
+export const isReady = (id) => READY_PLATFORMS.includes(id);
+
 /** LINE 圖文選單相關素材依頁數動態產生 */
 export function lineAssets(line) {
   const out = [];

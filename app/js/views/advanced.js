@@ -17,8 +17,8 @@ export function render(root) {
       <div class="row"><button type="button" class="btn primary" data-action="export-json">匯出進度（JSON）</button>
       <label class="btn ghost"><input type="file" id="importFile" accept="application/json,.json" hidden>匯入進度</label></div>
       <p class="hint">可匯入：本 APP 的進度檔（版本 ${SCHEMA_VERSION}）、舊版展示版的「品牌設計進度.json」、舊版「共用品牌資料.json」。檔案有誤時不會動到目前進度。</p></section>
-    <section class="card"><h2>${icon('doc', 'ic sm')} 全部平台素材包</h2>
-      <p>五個平台的圖片、文案、提示詞與設定引導，加上進度備份，一次打包成 ZIP。</p>
+    <section class="card"><h2>${icon('doc', 'ic sm')} 全部素材包</h2>
+      <p>已開放平台的圖片、文案、提示詞與設定引導，加上進度備份，一次打包成 ZIP。</p>
       <button type="button" class="btn primary" data-action="dl-all">下載全部素材包</button></section>
     <section class="card"><h2>${icon('link', 'ic sm')} 共用品牌資料</h2>
       <p>結構化的品牌核心（不含照片原檔、不含任何帳號憑證），可交給外部 AI 或日後新平台使用。</p>

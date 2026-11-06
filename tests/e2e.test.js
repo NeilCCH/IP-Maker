@@ -148,23 +148,41 @@ const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'brand-e2e-'));
     assert(JSON.stringify(after.platforms.lineOA.entries) === JSON.stringify(before.platforms.lineOA.entries) && after.identity.brandName === '衡遠', '切換風格改動了內容');
   });
 
-  await test('五平台都有 預覽／修改／下載／提示詞／設定引導', async () => {
-    for (const pid of ['facebook', 'website', 'instagram', 'lineOA', 'threads'])
+  const READY = await page.evaluate(async (u) => (await import(u)).READY_PLATFORMS, mod('platforms.js'));
+  const BUILDING = ['facebook', 'website', 'instagram', 'lineOA', 'threads'].filter((p) => !READY.includes(p));
+
+  await test('首頁先選平台；建置中的平台不能點', async () => {
+    await go('#/');
+    const pickable = await page.$$eval('button.pick', (bs) => bs.map((b) => b.dataset.id));
+    assert(JSON.stringify(pickable) === JSON.stringify(READY), `可選平台不符：${pickable}`);
+    assert((await page.$$('.pick.is-building')).length === BUILDING.length, '建置中平台數量不符');
+    assert(!(await page.$('.pick.is-building a, a.pick.is-building')), '建置中平台有連結');
+    await page.click(`button.pick[data-id="${READY[0]}"]`);
+    assert((await state()).meta.target === READY[0], '未記錄選擇的平台');
+  });
+
+  await test('已開放平台有 預覽／修改／下載／提示詞／設定引導；建置中平台無連結', async () => {
+    for (const pid of READY)
       for (const tab of ['preview', 'edit', 'download', 'prompt', 'guide']) {
         await go(`#/results/${pid}/${tab}`);
         const ok = await page.$eval('.panel-body', (el) => el.textContent.trim().length > 20);
         assert(ok, `${pid}/${tab} 沒有內容`);
       }
+    for (const pid of BUILDING) {
+      await go(`#/results/${pid}/preview`);
+      assert(!(await page.$(`.ptabs a[href*="/${pid}/"]`)), `${pid} 分頁仍有連結`);
+      assert(!(await page.$(`.overview a[href*="/${pid}/"]`)), `${pid} 總覽仍有連結`);
+    }
   });
 
   await test('平台專屬文字手動修改後，不被共用資料更新覆蓋', async () => {
-    await go('#/results/instagram/edit');
-    await page.fill('[data-text="instagram:bio"]', '我自己寫的簡介');
+    await go('#/results/lineOA/edit');
+    await page.fill('[data-text="lineOA:greeting"]', '我自己寫的歡迎詞');
     const s = await state();
     s.identity.slogan = '新標語';
     await setState(s);
-    await go('#/results/instagram/edit');
-    assert((await page.inputValue('[data-text="instagram:bio"]')) === '我自己寫的簡介', '手動內容被覆蓋');
+    await go('#/results/lineOA/edit');
+    assert((await page.inputValue('[data-text="lineOA:greeting"]')) === '我自己寫的歡迎詞', '手動內容被覆蓋');
     assert(await page.isVisible('[data-action="reset-text"]'), '沒有恢復自動產生的選項');
   });
 
@@ -239,7 +257,21 @@ const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'brand-e2e-'));
     s.identity.brandName = '<script>alert(1)</script>測試';
     s.freeform.style = '<img src=x onerror=alert(1)>';
     await setState(s);
-    for (const pid of ['facebook', 'website', 'instagram', 'lineOA', 'threads']) {
+    // 建置中的平台：介面未開放，但保留的產出功能仍要能正常運作
+    for (const pid of BUILDING) {
+      const b64 = await page.evaluate(async ([u, pid]) => {
+        const ex = await import(u);
+        const blob = await ex.platformZip(JSON.parse(localStorage.getItem('brand-studio-v2')), pid);
+        const bytes = new Uint8Array(await blob.arrayBuffer());
+        let bin = '';
+        for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+        return btoa(bin);
+      }, [mod('export.js'), pid]);
+      const f = path.join(TMP, `${pid}.zip`);
+      fs.writeFileSync(f, Buffer.from(b64, 'base64'));
+      zips[pid] = f;
+    }
+    for (const pid of READY) {
       await go(`#/results/${pid}/download`);
       const [dl] = await Promise.all([page.waitForEvent('download'), page.click('[data-action="dl-zip"]')]);
       const f = path.join(TMP, `${pid}.zip`);
@@ -254,8 +286,12 @@ const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'brand-e2e-'));
   await test('網頁與提示詞中的使用者文字不會被當成 HTML 執行', async () => {
     const html = execFileSync('python3', ['-I', '-c', 'import zipfile,sys;z=zipfile.ZipFile(sys.argv[1]);n=[x for x in z.namelist() if x.endswith("index.html")][0];print(z.read(n).decode())', zips.website], { encoding: 'utf8' });
     assert(!html.includes('<script>alert') && html.includes('&lt;script&gt;'), '網頁未跳脫使用者文字');
-    await go('#/results/website/preview');
-    assert(await page.$('iframe#webPreview[sandbox=""]'), '預覽 iframe 未沙箱化');
+    const webOk = await page.evaluate(async ([w, b]) => {
+      const web = await import(w); const br = await import(b);
+      const st = JSON.parse(localStorage.getItem('brand-studio-v2'));
+      return !web.websiteHTML(st, br.derive(st)).includes('<img src=x');
+    }, [mod('website.js'), mod('brand.js')]);
+    assert(webOk, '網頁含未跳脫的 HTML');
   });
 
   await test('素材與匯出不含權杖或憑證欄位', async () => {

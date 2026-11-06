@@ -6,6 +6,7 @@ import { proposalBoard } from '../draw.js';
 import { store, commit, save } from '../store.js';
 import { esc, toast } from '../util.js';
 import { icon } from './common.js';
+import { PLATFORM_BY_ID } from '../platforms.js';
 
 const S = () => store.state;
 
@@ -44,7 +45,7 @@ export function render(root) {
     <label class="field"><span>想調整的地方（選填）</span><textarea data-design-notes rows="3" maxlength="3000" placeholder="例如：標題再大一點、少一點線條…">${esc(s.designNotes)}</textarea></label>
     <p class="hint">這段文字會保存並帶入提示詞，交給外部 AI 或設計夥伴處理。目前系統不會自動理解文字並改圖。</p>
   </div>
-  <div class="actions-row"><a class="btn ghost" href="#/profile">← 回第一步修改</a><a class="btn primary" href="#/results">下一步：查看五平台成果 →</a></div>`;
+  <div class="actions-row"><a class="btn ghost" href="#/profile">← 回第一步修改</a><a class="btn primary" href="#/results/${s.meta.target}/preview">下一步：查看 ${esc(PLATFORM_BY_ID[s.meta.target].name)} 成果 →</a></div>`;
   paintBoards(root);
 }
 
@@ -62,7 +63,7 @@ export function onAction(act, el) {
   if (act === 'design-pick') {
     S().selectedDesignId = el.dataset.id;
     commit();
-    toast(`已選用「${DESIGNS.find((d) => d.id === el.dataset.id).name}」，五個平台的素材都會套用`);
+    toast(`已選用「${DESIGNS.find((d) => d.id === el.dataset.id).name}」，所有素材都會套用`);
     return true;
   }
   if (act === 'goto-q') {

@@ -1,5 +1,5 @@
 // 第三步：連接並完成——五平台固定入口，每個都有 預覽→修改→下載→提示詞→設定引導
-import { PLATFORMS, PLATFORM_BY_ID, assetsFor, statusOf } from '../platforms.js';
+import { PLATFORMS, PLATFORM_BY_ID, assetsFor, statusOf, isReady } from '../platforms.js';
 import { TEXT_FIELDS, textValue, lengthNote } from '../copy.js';
 import { derive } from '../brand.js';
 import { buildPrompt } from '../prompt.js';
@@ -18,6 +18,7 @@ const TABS = [
 
 function overview(current) {
   return `<div class="overview" role="list">${PLATFORMS.map((P) => {
+    if (!isReady(P.id)) return `<div role="listitem" class="ov is-building" aria-disabled="true">${icon(P.icon)}<b>${esc(P.name)}</b><span class="ov-counts"><span class="st st-none">建置中</span></span></div>`;
     const st = statusOf(P.id, S());
     const n = (k) => st.filter((x) => x.status === k).length;
     return `<a role="listitem" class="ov ${P.id === current ? 'is-current' : ''}" href="#/results/${P.id}/${P.id === current ? 'guide' : 'preview'}">
@@ -59,7 +60,7 @@ function previewTab(pid, D) {
 
 // ---------- 修改 ----------
 function sharedNote() {
-  return `<div class="card soft"><p><b>共用品牌資料</b>（名稱、配色、照片、語氣、禁忌）改一次，五個平台一起更新：</p>
+  return `<div class="card soft"><p><b>共用品牌資料</b>（名稱、配色、照片、語氣、禁忌）改一次，所有素材一起更新：</p>
   <div class="row"><a class="chip" href="#/profile" data-action="goto-q" data-q="name">品牌名稱與標語</a><a class="chip" href="#/profile" data-action="goto-q" data-q="palette">配色</a><a class="chip" href="#/profile" data-action="goto-q" data-q="photo">照片</a><a class="chip" href="#/profile" data-action="goto-q" data-q="tone">語氣</a><a class="chip" href="#/design">風格</a></div>
   <p class="hint">下面是這個平台專屬的文字。你改過的欄位會保留，不會因共用資料更新而被覆蓋；按「恢復自動產生」可改回系統版本。</p></div>`;
 }
@@ -152,16 +153,17 @@ function guideTab(pid) {
 
 // ---------- 主畫面 ----------
 export function render(root, [pidArg, tabArg]) {
-  const pid = PLATFORM_BY_ID[pidArg] ? pidArg : 'facebook';
+  const fallback = isReady(S().meta.target) ? S().meta.target : PLATFORMS.find((p) => isReady(p.id)).id;
+  const pid = PLATFORM_BY_ID[pidArg] && isReady(pidArg) ? pidArg : fallback;
   const tab = TABS.some(([t]) => t === tabArg) ? tabArg : 'preview';
   const D = derive(S());
   const P = PLATFORM_BY_ID[pid];
   const content = { preview: previewTab, edit: editTab, download: downloadTab, prompt: promptTab, guide: guideTab }[tab](pid, D);
   root.innerHTML = `
   <div class="page-head"><p class="eyebrow">第三步</p><h1 tabindex="-1">連接並完成</h1>
-  <p class="lead">五個平台都已備好品牌素材。每個平台照「預覽 → 修改 → 下載 → 提示詞 → 設定引導」完成；可以先做一個平台，其他的隨時回來。</p></div>
+  <p class="lead">照「預覽 → 修改 → 下載 → 提示詞 → 設定引導」的順序完成。標示「建置中」的平台，完成後會陸續開放。</p></div>
   ${overview(pid)}
-  <nav class="ptabs" aria-label="平台">${PLATFORMS.map((x) => `<a href="#/results/${x.id}/${tab}" aria-current="${x.id === pid ? 'page' : 'false'}">${icon(x.icon, 'ic sm')}${esc(x.name)}</a>`).join('')}</nav>
+  <nav class="ptabs" aria-label="平台">${PLATFORMS.map((x) => (isReady(x.id) ? `<a href="#/results/${x.id}/${tab}" aria-current="${x.id === pid ? 'page' : 'false'}">${icon(x.icon, 'ic sm')}${esc(x.name)}</a>` : `<span class="is-building" aria-disabled="true" title="建置中">${icon(x.icon, 'ic sm')}${esc(x.name)}<small>建置中</small></span>`)).join('')}</nav>
   <section class="panel" aria-labelledby="pTitle">
     <header class="panel-head"><h2 id="pTitle">${esc(P.name)}</h2><p>${esc(P.summary)}・風格：${esc(D.design.name)}</p></header>
     <nav class="subtabs" aria-label="${esc(P.name)} 操作">${TABS.map(([t, label], i) => `<a href="#/results/${pid}/${t}" aria-current="${t === tab ? 'page' : 'false'}"><span class="n">${i + 1}</span>${label}</a>`).join('')}</nav>
