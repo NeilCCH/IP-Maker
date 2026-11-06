@@ -21,7 +21,7 @@ export function render(root) {
     <p><b>三款都已套用你的設定</b></p>
     <ul class="tags">
       <li>配色：${esc(D.palette.name)}${D.palette.auto ? '（系統建議）' : ''}</li>
-      <li>照片：${D.photoMode === 'none' ? (s.photo ? '不放照片' : '未上傳，使用文字標誌') : D.photoMode === 'hero' ? '醒目呈現' : '適度呈現'}</li>
+      <li>照片：${D.photoMode === 'none' ? (s.photo ? '不放照片' : '未上傳，使用文字標誌') : D.photoMode === 'hero' ? '醒目呈現' : D.photoMode === 'avatar' ? '只放在頭像' : '適度呈現'}</li>
       ${rules.map((r) => `<li>${esc(r)}</li>`).join('')}
     </ul>
     ${D.nameIsPlaceholder ? `<p class="hint warn-text">還沒有品牌名稱或姓名，圖上暫時顯示「你的品牌」。<a href="#/profile" data-action="goto-q" data-q="name">去填寫 →</a></p>` : ''}

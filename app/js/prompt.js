@@ -53,7 +53,7 @@ export function buildPrompt(state, D, pid, extra = '') {
     `- 已選風格：${D.design.name}（${D.design.tag}）`,
     ...D.design.rules.map((r) => `  - ${r}`),
     `- 配色：${D.palette.name}｜主色 ${D.palette.primary}、輔色 ${D.palette.accent}、淺底 ${D.palette.bg}、文字 ${D.palette.ink}`,
-    `- 照片：${D.photoMode === 'none' ? '不使用照片；不得生成或虛構本人肖像' : D.photoMode === 'hero' ? '醒目呈現本人照片（使用者另行提供原始照片，不得生成替代人像）' : '適度呈現本人照片（使用者另行提供，不得生成替代人像）'}`,
+    `- 照片：${D.photoMode === 'none' ? '不使用照片；不得生成或虛構本人肖像' : D.photoMode === 'avatar' ? '只有頭像使用本人照片，其他素材不放照片；不得生成替代人像' : D.photoMode === 'hero' ? '醒目呈現本人照片（使用者另行提供原始照片，不得生成替代人像）' : '適度呈現本人照片（使用者另行提供，不得生成替代人像）'}`,
     `- 明確禁忌：${list(avoidSummary(D))}`,
     D.designNotes ? `- 使用者對風格的補充：${D.designNotes}` : '',
     '',

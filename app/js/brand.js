@@ -19,7 +19,10 @@ const AVOID_TEXT_RULES = [
   [/廣告|制式|老套|推銷/, 'adcliche', '避免制式保險廣告感'],
 ];
 
-const EXPERTISE_SHORT = { 保單整理: '保單整理', 退休生活與現金流: '退休規劃', 資產傳承: '資產傳承', 企業與家庭風險: '企業與家庭風險', 醫療與長照保障: '醫療長照', 理賠與日常服務: '理賠服務' };
+const EXPERTISE_SHORT = { 保單整理: '保單整理', 退休生活與現金流: '退休規劃', 資產傳承: '資產傳承', 企業與家庭風險: '企業與家庭風險', 醫療與長照保障: '醫療長照', 理賠與日常服務: '理賠服務', 子女教育金: '教育金規劃', 外幣與投資型保單: '外幣保單', 財富規劃觀念: '財富規劃' };
+
+/** 9 種語氣歸成 3 個文案家族，用於貼文結尾等共用句型；歡迎詞則每種語氣各有一版 */
+export const TONE_FAMILY = { 專業直接: '專業直接', 理性分析: '專業直接', 正式禮貌: '專業直接', 穩重親切: '穩重親切', 溫暖貼心: '穩重親切', 熱情積極: '穩重親切', 幽默輕鬆: '穩重親切', 簡短俐落: '簡短俐落' };
 
 export const PH = (label) => `【待填：${label}】`;
 export const isPH = (s) => /【待填：/.test(String(s));
@@ -59,7 +62,7 @@ const conflictsWith = (palette, avoidHues) => palette.hues.filter((h) => avoidHu
 function autoPalette(state, avoidHues) {
   const style = state.answers.style[0];
   const traits = state.answers.traits;
-  let pick = { 專業科技: 'electric', 簡潔俐落: 'graphite', 沉穩精緻: 'ocean', 親切自然: 'forest' }[style];
+  let pick = { 專業科技: 'electric', 簡潔俐落: 'graphite', 沉穩精緻: 'ocean', 親切自然: 'forest', 溫暖人文: 'clay', 活力明亮: 'coral', 時尚質感: 'graphite', 清新療癒: 'forest' }[style];
   if (!pick) pick = traits.some((t) => /親切|溫度/.test(t)) ? 'forest' : traits.includes('年輕有活力') ? 'coral' : 'electric';
   const ordered = [PALETTES.find((p) => p.id === pick), ...PALETTES];
   return ordered.find((p) => !conflictsWith(p, avoidHues).length) || PALETTES[0];
@@ -119,6 +122,7 @@ function resolvePhotoMode(state) {
   if (opt === '不放照片') return 'none';
   if (detectConflicts(state).some((c) => c.id === 'photo-none') && resolved(state, 'photo-none') === 'text') return 'none';
   if (!state.photo) return 'none';
+  if (opt === '只放在頭像') return 'avatar';
   if (opt === '醒目呈現') return 'hero';
   return 'moderate';
 }
@@ -127,7 +131,10 @@ function resolveTone(state) {
   const t = state.answers.tone[0];
   if (t && t !== '交由系統建議') return t;
   const tr = state.answers.traits;
-  if (tr.some((x) => /親切|溫度|沉穩/.test(x))) return '穩重親切';
+  if (tr.includes('幽默風趣')) return '幽默輕鬆';
+  if (tr.includes('熱情積極') || tr.includes('年輕有活力')) return '熱情積極';
+  if (tr.some((x) => /溫度/.test(x))) return '溫暖貼心';
+  if (tr.some((x) => /親切|沉穩|誠懇/.test(x))) return '穩重親切';
   if (tr.includes('思路清楚有效率')) return '簡短俐落';
   return '專業直接';
 }
@@ -148,10 +155,14 @@ export function derive(state, designId = state.selectedDesignId) {
   const positioning = positioningOf(state);
   const titleName = brandName || personName || '你的品牌';
   const display = state.answers.display[0] || '交由系統建議';
+  const jobTitle = id.jobTitle.trim();
   const displayName =
     display === '姓名' ? personName || PH('姓名')
     : display === '姓名加定位' ? `${personName || PH('姓名')}｜${positioning}`
+    : display === '姓名加職稱' ? `${personName || PH('姓名')}｜${jobTitle || PH('職稱')}`
+    : display === '姓氏加稱謂' ? `${personName ? [...personName][0] : PH('姓氏')}${jobTitle ? [...jobTitle].slice(-2).join('') : PH('稱謂')}`
     : display === '個人品牌名稱' ? brandName || PH('品牌名稱')
+    : display === '品牌加姓名' ? `${brandName || PH('品牌名稱')}｜${personName || PH('姓名')}`
     : brandName || personName || PH('品牌名稱');
   const design = DESIGN_BY_ID[designId] || DESIGN_BY_ID.tech;
   return {
@@ -164,6 +175,7 @@ export function derive(state, designId = state.selectedDesignId) {
     expertise: valuesOrText(state, 'expertise', 20),
     services: state.platforms.lineOA.entries,
     tone: resolveTone(state),
+    toneFamily: TONE_FAMILY[resolveTone(state)] || '專業直接',
     toneText: (state.freeform.tone || '').trim().length >= 8 ? state.freeform.tone.trim() : '',
     palette,
     design,
@@ -171,6 +183,7 @@ export function derive(state, designId = state.selectedDesignId) {
     avoidHues: avoid.hues,
     photo: state.photo,
     photoMode: resolvePhotoMode(state),
+    showPhoto: ['hero', 'moderate'].includes(resolvePhotoMode(state)),
     contact: id.contact,
     freeform: state.freeform,
     designNotes: state.designNotes,
@@ -187,6 +200,11 @@ const NAME_BANK = {
   穩健安心: ['恆安', '守和', '安序', '穩衡', '實安', '恆心', '和序', '守恆', '安澄', '穩行'],
   理性前瞻: ['衡遠', '明序', '遠見', '策遠', '明衡', '知遠', '序遠', '見度', '衡策', '明遠'],
   人生從容: ['從容', '悠然', '自在', '餘裕', '和光', '緩行', '安步', '好日', '從序', '寬心'],
+  溫暖陪伴: ['伴行', '和心', '知心', '同行', '暖序', '安伴', '相伴', '暖心', '溫和', '心安'],
+  專業權威: ['明鑑', '正衡', '卓見', '研衡', '精策', '實鑑', '明策', '衡正', '博見', '正策'],
+  家庭守護: ['守家', '安家', '護家', '家安', '和家', '家恆', '佑安', '家和', '守安', '恆家'],
+  傳承永續: ['承遠', '傳恆', '永序', '承安', '續遠', '承和', '恆傳', '長承', '延安', '承序'],
+  簡潔好記: ['一衡', '安心', '明日', '三安', '穩穩', '安好', '日常', '簡安', '好安', '一心'],
 };
 
 export function nameProposals(state) {
@@ -208,8 +226,11 @@ const SLOGAN_BANK = [
   [/傳承/, ['把重要的，好好交棒']],
   [/醫療|長照/, ['先準備，照顧才從容']],
   [/理賠|服務/, ['需要的時候，有人陪你走']],
+  [/教育/, ['孩子的未來，提早一步準備']],
+  [/外幣|投資/, ['看懂再選擇，不跟風']],
+  [/財富/, ['財富要規劃，也要安心']],
 ];
-const SLOGAN_BY_DIR = { 穩健安心: '穩穩規劃，安心向前', 理性前瞻: '想清楚，再往前', 人生從容: '從容，來自提早準備' };
+const SLOGAN_BY_DIR = { 穩健安心: '穩穩規劃，安心向前', 理性前瞻: '想清楚，再往前', 人生從容: '從容，來自提早準備', 溫暖陪伴: '重要的路，有人陪你走', 專業權威: '把專業，用在你最在意的事', 家庭守護: '守護家，從今天開始安排', 傳承永續: '把重要的，好好傳下去', 簡潔好記: '想清楚，就安心' };
 
 export function sloganProposals(state) {
   const ex = state.answers.expertise.join(' ') + ' ' + (state.freeform.expertise || '');

@@ -26,7 +26,7 @@ export function websiteHTML(state, D) {
     c.phone ? `<a class="btn ghost" href="tel:${esc(c.phone.replace(/[^\d+]/g, ''))}">電話 ${esc(c.phone)}</a>` : '',
     c.email ? `<a class="btn ghost" href="mailto:${esc(c.email)}">Email</a>` : '',
   ].filter(Boolean).join('');
-  const markHTML = D.photo && D.photoMode !== 'none'
+  const markHTML = D.photo && D.showPhoto
     ? `<img class="mark photo${D.photoMode === 'hero' ? ' big' : ''}" src="${D.photo}" alt="${esc(D.personName || D.titleName)} 的照片">`
     : `<div class="mark" aria-hidden="true">${esc([...(D.brandName || D.personName || '品')][0])}</div>`;
   const services = D.services.filter((e) => e.label && !/留言給我|常見問題/.test(e.label)).slice(0, 6);

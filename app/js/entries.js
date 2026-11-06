@@ -34,7 +34,7 @@ function topicFor(label) {
 }
 
 const closing = (D, cta = '想進一步了解，可以點選單的「預約諮詢」，或直接留言給我。') =>
-  D.tone === '簡短俐落' ? '有需要，直接留言給我。' : cta;
+  D.toneFamily === '簡短俐落' ? '有需要，直接留言給我。' : cta;
 
 /** 依入口名稱產生預設回覆文字（不虛構經歷與數據，未知處用【待填】） */
 export function generateReply(D, entry, state) {

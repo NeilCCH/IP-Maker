@@ -61,9 +61,11 @@ const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'brand-e2e-'));
     await go('#/profile');
     await page.click('[data-action="opt"][data-v="專業可靠"]');
     await page.click('[data-action="opt"][data-v="親切好聊"]');
-    await page.click('[data-action="opt"][data-v="沉穩安心"]'); // 超過上限
+    await page.click('[data-action="opt"][data-v="沉穩安心"]');
+    await page.click('[data-action="opt"][data-v="熱情積極"]'); // 超過上限 3
     let s = await state();
-    assert(s.answers.traits.length === 2, '多選上限未生效');
+    assert(s.answers.traits.length === 3, `多選上限未生效：${s.answers.traits}`);
+    assert((await page.$$('[data-action="opt"]')).length === 9, '個人特質不是 9 個選項');
     await page.fill('[data-ff="traits"]', '希望像朋友一樣可靠');
     s = await state();
     assert(s.freeform.traits === '希望像朋友一樣可靠', '補充文字未保存');

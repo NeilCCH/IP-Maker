@@ -217,7 +217,7 @@ function monogramChar(D) {
 function mark(ctx, D, cx, cy, r) {
   const { primary, accent, bg } = D.palette;
   ctx.save();
-  if (D.photoImg && D.photoMode !== 'none') {
+  if (D.photoImg && D.showPhoto) {
     ctx.restore();
     photoBox(ctx, D.photoImg, cx - r, cy - r, r * 2, r * 2, D.design.id === 'minimal' ? r * 0.12 : r * 0.3);
     return;
@@ -308,7 +308,7 @@ function welcomeSplit(ctx, W, H, D) {
 }
 
 export function welcomeCard(ctx, W, H, D) {
-  if (D.photoImg && D.photoMode !== 'none') return welcomeSplit(ctx, W, H, D);
+  if (D.photoImg && D.showPhoto) return welcomeSplit(ctx, W, H, D);
   const { primary, accent, ink } = D.palette;
   const k = W / 1040, sp = space(D);
   background(ctx, W, H, D);
@@ -439,7 +439,7 @@ export function cover(ctx, W, H, D) {
   const safeW = Math.min(W, H * 1.78); // 手機版會裁掉左右，重點放在中間安全區
   const sx = (W - safeW) / 2;
   const k = H / 624, sp = space(D);
-  const hasPhoto = D.photoImg && D.photoMode !== 'none';
+  const hasPhoto = D.photoImg && D.showPhoto;
   const d = D.design.id;
   let textRight = sx + safeW - 90 * k;
   if (hasPhoto) {
@@ -467,7 +467,7 @@ export function cover(ctx, W, H, D) {
 
 function header(ctx, W, D, k) {
   const { primary, ink } = D.palette;
-  const hasPhoto = D.photoImg && D.photoMode !== 'none';
+  const hasPhoto = D.photoImg && D.showPhoto;
   mark(ctx, D, 110 * k, 120 * k, 44 * k);
   ctx.textAlign = 'left';
   fit(ctx, D.titleName, 700, 38 * k, 24 * k, W - 400 * k);
