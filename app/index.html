@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>品牌實驗室｜個人品牌工作台</title>
+<meta name="description" content="回答幾個簡單問題，用同一份品牌資料產出 Facebook、個人網頁、Instagram、LINE 官方帳號、Threads 的品牌素材。">
+<meta name="theme-color" content="#155eef">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="品牌實驗室">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<a class="skip" href="#main">跳到主要內容</a>
+<header class="topbar">
+  <div class="topbar-in">
+    <a class="logo" href="#/" aria-label="品牌實驗室 首頁"><img src="icons/icon.svg" alt="" width="32" height="32"><span>品牌實驗室</span></a>
+    <nav class="stepper" aria-label="建立步驟">
+      <a href="#/profile" data-step="1"><span class="n">1</span><span class="t">說說你自己</span></a>
+      <a href="#/design" data-step="2"><span class="n">2</span><span class="t">選喜歡的樣子</span></a>
+      <a href="#/results" data-step="3"><span class="n">3</span><span class="t">連接並完成</span></a>
+    </nav>
+    <div class="topbar-tools">
+      <button type="button" class="btn ghost sm" id="installBtn" data-action="install" hidden>加入主畫面</button>
+      <a class="adv-link" href="#/advanced">進階工具</a>
+    </div>
+  </div>
+  <p id="saveStatus" class="save-status" aria-live="polite">已自動儲存於此裝置</p>
+</header>
+<div id="updateBar" class="update-bar" hidden role="status">有新版本可以使用。<button type="button" class="btn sm" data-action="apply-update">更新並重新整理</button></div>
+<main id="main" class="wrap"></main>
+<footer class="site-foot wrap">品牌實驗室・資料只存在這台裝置・素材為規則式版型，非 AI 生圖・不會代你登入或發文</footer>
+<dialog id="detail" aria-labelledby="detailTitle">
+  <h2 id="detailTitle"></h2>
+  <p data-d="desc"></p>
+  <p class="hint" data-d="status"></p>
+  <div class="row"><a class="btn ghost" target="_blank" rel="noopener noreferrer" hidden>打開連結 ↗</a><button type="button" class="btn primary" data-action="close-dialog">關閉</button></div>
+</dialog>
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+<noscript><p class="wrap">請開啟 JavaScript 才能使用品牌實驗室。</p></noscript>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

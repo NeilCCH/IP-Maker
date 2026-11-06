@@ -1,0 +1,332 @@
+// 第三步：連接並完成——五平台固定入口，每個都有 預覽→修改→下載→提示詞→設定引導
+import { PLATFORMS, PLATFORM_BY_ID, assetsFor, statusOf } from '../platforms.js';
+import { TEXT_FIELDS, textValue, lengthNote } from '../copy.js';
+import { derive } from '../brand.js';
+import { buildPrompt } from '../prompt.js';
+import { layout, pageEntries, entryStatus, richMenuConfig, RM_W, RM_H } from '../line.js';
+import { entriesOutOfSync, entriesFromServices } from '../model.js';
+import { websiteHTML } from '../website.js';
+import { prepare, assetBlob, platformZip, textsTxt, guideDynamic } from '../export.js';
+import { store, commit, save } from '../store.js';
+import { esc, toast, download, copyText, hash, safeURL, charLen } from '../util.js';
+import { icon, badge, paintAssets, assetFigure } from './common.js';
+
+const S = () => store.state;
+const TABS = [
+  ['preview', '預覽'], ['edit', '修改'], ['download', '下載'], ['prompt', '提示詞'], ['guide', '設定引導'],
+];
+
+function overview(current) {
+  return `<div class="overview" role="list">${PLATFORMS.map((P) => {
+    const st = statusOf(P.id, S());
+    const n = (k) => st.filter((x) => x.status === k).length;
+    return `<a role="listitem" class="ov ${P.id === current ? 'is-current' : ''}" href="#/results/${P.id}/${P.id === current ? 'guide' : 'preview'}">
+      ${icon(P.icon)}<b>${esc(P.name)}</b>
+      <span class="ov-counts"><span class="st st-done">已完成 ${n('done')}</span><span class="st st-todo">待本人操作 ${n('todo')}</span><span class="st st-none">尚未串接 ${n('none')}</span></span></a>`;
+  }).join('')}</div>`;
+}
+
+// ---------- 預覽 ----------
+function lineMock(D) {
+  const L = S().platforms.lineOA;
+  const p = L.activePage;
+  return `<div class="phone-col"><div class="phone" aria-label="LINE 聊天室模擬（LINE 原生介面為示意，只有頭像、訊息與選單可自訂）">
+    <div class="phone-top"><span>‹</span><b>${esc(D.displayName)}</b><span>☰</span></div>
+    <div class="phone-chat">
+      <div class="msg"><canvas class="avatar-s" data-asset="lineOA:avatar" width="640" height="640" aria-hidden="true"></canvas><canvas class="bubble-img" data-asset="lineOA:welcome" width="1040" height="1040" role="img" aria-label="歡迎圖卡"></canvas></div>
+      <div class="msg"><canvas class="avatar-s" data-asset="lineOA:avatar" width="640" height="640" aria-hidden="true"></canvas><p class="bubble">${esc(textValue(S(), D, 'lineOA', 'greeting'))}</p></div>
+    </div>
+    <div class="phone-menu"><canvas id="rmPreview" data-asset="lineOA:richmenu${p + 1}" width="${RM_W}" height="${RM_H}" role="img" aria-label="圖文選單第 ${p + 1} 頁，可點擊測試"></canvas></div>
+    <div class="phone-bar">選單 ▾ 我的服務</div>
+  </div>
+  <p class="hint">點選單上的格子可看該入口的功能${L.pages === 2 ? '；點上方切頁區可切換頁面' : ''}。LINE 聊天室外框是示意，實際外觀由 LINE 決定。</p>
+  ${L.pages === 2 ? `<div class="row">${[0, 1].map((i) => `<button type="button" class="chip" data-action="line-page" data-v="${i}" aria-pressed="${L.activePage === i}">${esc(L.pageNames[i])}</button>`).join('')}</div>` : ''}</div>`;
+}
+
+function textCards(pid, D) {
+  return `<div class="text-cards">${TEXT_FIELDS[pid].map((f) => `<div class="text-card"><p class="label">${esc(f.label)}</p><p class="pre">${esc(textValue(S(), D, pid, f.key))}</p></div>`).join('')}</div>`;
+}
+
+function previewTab(pid, D) {
+  const assets = assetsFor(pid, S());
+  if (pid === 'lineOA') return `<div class="split">${lineMock(D)}<div><h3>素材</h3><div class="assets">${assets.filter((a) => !a.id.startsWith('clickmap')).map((a) => assetFigure(pid, a)).join('')}</div></div></div>`;
+  if (pid === 'website') return `<div class="row"><button type="button" class="chip" data-action="web-width" data-v="390" aria-pressed="true">手機寬度</button><button type="button" class="chip" data-action="web-width" data-v="1024" aria-pressed="false">電腦寬度</button></div>
+    <div class="web-frame"><iframe id="webPreview" title="個人網頁預覽" sandbox="" srcdoc="${esc(websiteHTML(S(), D))}"></iframe></div>
+    <p class="hint">這是下載後的網頁實際樣子。黃色虛線框是【待填】欄位，上線前請換成真實資料。</p>
+    <div class="assets">${assets.map((a) => assetFigure(pid, a)).join('')}</div>`;
+  return `<div class="assets">${assets.map((a) => assetFigure(pid, a)).join('')}</div><h3>文字內容</h3>${textCards(pid, D)}`;
+}
+
+// ---------- 修改 ----------
+function sharedNote() {
+  return `<div class="card soft"><p><b>共用品牌資料</b>（名稱、配色、照片、語氣、禁忌）改一次，五個平台一起更新：</p>
+  <div class="row"><a class="chip" href="#/profile" data-action="goto-q" data-q="name">品牌名稱與標語</a><a class="chip" href="#/profile" data-action="goto-q" data-q="palette">配色</a><a class="chip" href="#/profile" data-action="goto-q" data-q="photo">照片</a><a class="chip" href="#/profile" data-action="goto-q" data-q="tone">語氣</a><a class="chip" href="#/design">風格</a></div>
+  <p class="hint">下面是這個平台專屬的文字。你改過的欄位會保留，不會因共用資料更新而被覆蓋；按「恢復自動產生」可改回系統版本。</p></div>`;
+}
+
+function textEditors(pid, D) {
+  return TEXT_FIELDS[pid].map((f) => {
+    const v = textValue(S(), D, pid, f.key);
+    const edited = typeof S().platforms[pid].overrides[f.key] === 'string';
+    const { n, over } = lengthNote(f, v);
+    return `<div class="field text-edit"><label for="t-${pid}-${f.key}">${esc(f.label)}</label>
+      <textarea id="t-${pid}-${f.key}" data-text="${pid}:${f.key}" rows="${f.max <= 150 ? 3 : 7}">${esc(v)}</textarea>
+      <div class="field-foot"><span class="count ${over ? 'over' : ''}" data-count="${pid}:${f.key}">${n} / ${f.max} 字${over ? '・超過平台上限' : ''}</span>
+      ${edited ? `<span class="st st-todo">已手動修改</span><button type="button" class="link-btn" data-action="reset-text" data-p="${pid}" data-k="${f.key}">恢復自動產生</button>` : '<span class="st st-none">系統產生</span>'}</div></div>`;
+  }).join('');
+}
+
+function lineEditor() {
+  const L = S().platforms.lineOA;
+  const p = L.activePage;
+  const sync = entriesOutOfSync(S());
+  return `<div class="card">
+    <h3>選單配置</h3>
+    <div class="row"><span class="label">每頁格數</span>${[6, 8].map((v) => `<button type="button" class="chip" data-action="line-count" data-v="${v}" aria-pressed="${L.count === v}">${v} 格（${v === 6 ? 3 : 4} 欄 × 2 行）</button>`).join('')}</div>
+    <div class="row"><span class="label">頁數</span>${[1, 2].map((v) => `<button type="button" class="chip" data-action="line-pages" data-v="${v}" aria-pressed="${L.pages === v}">${v} 頁${v === 2 ? `（共 ${L.count * 2} 個入口）` : ''}</button>`).join('')}</div>
+    ${L.pages === 2 ? `<div class="grid2">${[0, 1].map((i) => `<label class="field"><span>第 ${i + 1} 頁名稱（切頁按鈕）</span><input data-pagename="${i}" maxlength="12" value="${esc(L.pageNames[i])}"></label>`).join('')}</div>` : ''}
+    <p class="hint">${L.count === 6 && L.pages === 1 ? '單頁 6 格可以用官方後台的現成版型自己設定。' : '8 格或雙頁需要 Messaging API（設定引導會說明）。'}切換格數或頁數時，被隱藏的入口會保留，切回來就會出現。</p>
+  </div>
+  ${sync ? `<div class="conflict"><p>${icon('question')} 你在第一步調整了服務順序，但選單入口曾手動修改過。要套用新的順序嗎？（會重設入口名稱與說明）</p><div class="row"><button type="button" class="chip" data-action="entries-resync">套用新順序</button><button type="button" class="chip" data-action="entries-keep">保留目前入口</button></div></div>` : ''}
+  <div class="card">
+    <h3>服務入口</h3>
+    ${L.pages === 2 ? `<div class="row">${[0, 1].map((i) => `<button type="button" class="chip" data-action="line-page" data-v="${i}" aria-pressed="${p === i}">編輯：${esc(L.pageNames[i])}</button>`).join('')}</div>` : ''}
+    <div class="entries">${pageEntries(L, p).map((e, i) => {
+      const j = p * 8 + i, st = entryStatus(e);
+      return `<details class="entry" ${i === 0 ? 'open' : ''}><summary><span class="num">${i + 1}</span><b>${esc(e.label || '未命名')}</b><span class="st ${st.kind === 'link' ? 'st-done' : st.kind === 'invalid' ? 'st-err' : 'st-todo'}">${st.kind === 'link' ? '連結' : st.kind === 'invalid' ? '網址有誤' : '待設定'}</span></summary>
+        <label class="field"><span>入口名稱（顯示在選單上，建議 4–5 字）</span><input data-entry="${j}:label" maxlength="20" value="${esc(e.label)}"></label>
+        <label class="field"><span>功能說明／回覆內容</span><textarea data-entry="${j}:description" rows="2" maxlength="1000">${esc(e.description)}</textarea></label>
+        <label class="field"><span>連結（選填：Google 表單、日曆預約頁、你的網頁…）</span><input data-entry="${j}:url" type="url" inputmode="url" maxlength="2000" placeholder="https://" value="${esc(e.url)}"></label>
+        <p class="hint" data-entry-status="${j}">${esc(st.text)}</p></details>`;
+    }).join('')}</div>
+    <button type="button" class="link-btn" data-action="entries-reset">依第一步的服務順序重新產生入口</button>
+  </div>`;
+}
+
+function editTab(pid, D) {
+  return `${sharedNote()}${pid === 'lineOA' ? lineEditor() : ''}<div class="card"><h3>${esc(PLATFORM_BY_ID[pid].name)} 專屬文字</h3>${textEditors(pid, D)}</div>`;
+}
+
+// ---------- 下載 ----------
+function downloadTab(pid) {
+  const assets = assetsFor(pid, S());
+  return `<div class="card dl-main"><div><h3>下載本平台素材包</h3><p class="hint">一次下載所有圖片、文案、提示詞與設定引導（ZIP）。</p></div><button type="button" class="btn primary" data-action="dl-zip" data-p="${pid}">${icon('doc', 'ic sm')} 下載素材包</button></div>
+  <ul class="dl-list">
+    ${assets.map((a) => `<li><span>${esc(a.label)}<small>${a.w}×${a.h}${a.note ? `・${esc(a.note)}` : ''}</small></span><button type="button" class="btn ghost" data-action="dl-asset" data-p="${pid}" data-a="${a.id}">下載圖片</button></li>`).join('')}
+    <li><span>文案（TXT）<small>所有可複製的文字</small></span><button type="button" class="btn ghost" data-action="dl-text" data-p="${pid}">下載</button></li>
+    ${pid === 'lineOA' ? `<li><span>點擊區設定檔（JSON）<small>給 Messaging API 或支援夥伴使用</small></span><button type="button" class="btn ghost" data-action="dl-config">下載</button></li>` : ''}
+    ${pid === 'website' ? `<li><span>網頁檔 index.html<small>可直接上傳到免費主機</small></span><button type="button" class="btn ghost" data-action="dl-html">下載</button></li>` : ''}
+  </ul>
+  ${pid === 'lineOA' ? '<p class="hint">圖文選單圖片若超過 LINE 的 1MB 上限，會自動改存為 JPEG。</p>' : ''}`;
+}
+
+// ---------- 提示詞 ----------
+function promptTab(pid, D) {
+  const pr = S().platforms[pid].prompt;
+  const gen = buildPrompt(S(), D, pid, pr.extra);
+  const stale = pr.draft && pr.basis !== hash(gen);
+  return `<div class="card"><p class="hint">提示詞已自動帶入：品牌資料、已選風格、配色、禁忌、你的每一則自由回答，以及 ${esc(PLATFORM_BY_ID[pid].name)} 的配置。可以貼到 Claude、ChatGPT、Gemini 或 Claude Code 繼續製作。</p>
+    <label class="field"><span>這次的額外要求（選填）</span><textarea data-prompt-extra="${pid}" rows="2" maxlength="3000" placeholder="例如：幫我多做 3 種封面版本">${esc(pr.extra)}</textarea></label>
+    ${stale ? `<div class="conflict"><p>${icon('question')} 品牌資料已更新，但你手動改過這份提示詞。要重新生成嗎？</p><div class="row"><button type="button" class="chip" data-action="prompt-regen" data-p="${pid}">重新生成（覆蓋我的修改）</button><button type="button" class="chip" data-action="prompt-keep" data-p="${pid}">保留我的版本</button></div></div>` : ''}
+    <label class="field"><span>完整提示詞（可直接修改）${pr.draft ? '・<b>已手動修改</b>' : ''}</span><textarea id="promptOut" data-prompt-draft="${pid}" rows="16">${esc(pr.draft || gen)}</textarea></label>
+    <div class="row"><button type="button" class="btn primary" data-action="prompt-copy">${icon('doc', 'ic sm')} 複製提示詞</button><button type="button" class="btn ghost" data-action="prompt-dl" data-p="${pid}">下載 TXT</button>${pr.draft ? `<button type="button" class="btn ghost" data-action="prompt-regen" data-p="${pid}">恢復自動產生</button>` : ''}</div>
+    <p class="hint">這是規則式組合，不使用付費 AI。AI 生圖、實際部署需在外部工具完成，提示詞已要求對方分開標示完成範圍。</p></div>`;
+}
+
+// ---------- 設定引導 ----------
+function guideTab(pid) {
+  const P = PLATFORM_BY_ID[pid];
+  const pl = S().platforms[pid];
+  const st = statusOf(pid, S());
+  const urlField = P.test.urlField;
+  return `<div class="card"><h3>完成狀態</h3><ul class="status-list">${st.map((x) => `<li>${badge(x.status, x.text)}<span>${esc(x.label)}</span></li>`).join('')}</ul>
+    <p class="hint">「已完成」只代表系統產出素材或你自己確認；APP 不會替你登入、發文或宣稱已串接。</p></div>
+    <ol class="guide">${P.guide.map((g, i) => `<li class="card"><div class="g-head"><span class="step-no">${i + 1}</span><h3>${esc(g.title)}</h3></div>
+      <p class="pre">${esc(g.body || guideDynamic(S(), g))}</p>
+      ${g.link ? `<p><a href="${esc(g.link)}" target="_blank" rel="noopener noreferrer">打開官方頁面 ↗</a></p>` : ''}
+      ${g.check ? `<label class="check"><input type="checkbox" data-check="${pid}:${g.check}" ${pl.checklist[g.check] ? 'checked' : ''}> 我已完成這一步</label>` : ''}</li>`).join('')}</ol>
+    <div class="card"><h3>測試</h3><p>${esc(P.test.label)}</p>
+      ${urlField ? `<label class="field"><span>${pid === 'website' ? '我的網頁網址' : '官方帳號加好友網址'}</span><input type="url" inputmode="url" data-url-field="${pid}:${urlField}" value="${esc(pl[urlField] || '')}" placeholder="https://"></label>
+      ${safeURL(pl[urlField]) ? `<p><a class="btn ghost" href="${esc(safeURL(pl[urlField]))}" target="_blank" rel="noopener noreferrer">打開測試 ↗</a></p>` : '<p class="hint">完成上線後貼上網址，就能從這裡打開測試。</p>'}` : ''}</div>`;
+}
+
+// ---------- 主畫面 ----------
+export function render(root, [pidArg, tabArg]) {
+  const pid = PLATFORM_BY_ID[pidArg] ? pidArg : 'facebook';
+  const tab = TABS.some(([t]) => t === tabArg) ? tabArg : 'preview';
+  const D = derive(S());
+  const P = PLATFORM_BY_ID[pid];
+  const content = { preview: previewTab, edit: editTab, download: downloadTab, prompt: promptTab, guide: guideTab }[tab](pid, D);
+  root.innerHTML = `
+  <div class="page-head"><p class="eyebrow">第三步</p><h1 tabindex="-1">連接並完成</h1>
+  <p class="lead">五個平台都已備好品牌素材。每個平台照「預覽 → 修改 → 下載 → 提示詞 → 設定引導」完成；可以先做一個平台，其他的隨時回來。</p></div>
+  ${overview(pid)}
+  <nav class="ptabs" aria-label="平台">${PLATFORMS.map((x) => `<a href="#/results/${x.id}/${tab}" aria-current="${x.id === pid ? 'page' : 'false'}">${icon(x.icon, 'ic sm')}${esc(x.name)}</a>`).join('')}</nav>
+  <section class="panel" aria-labelledby="pTitle">
+    <header class="panel-head"><h2 id="pTitle">${esc(P.name)}</h2><p>${esc(P.summary)}・風格：${esc(D.design.name)}</p></header>
+    <nav class="subtabs" aria-label="${esc(P.name)} 操作">${TABS.map(([t, label], i) => `<a href="#/results/${pid}/${t}" aria-current="${t === tab ? 'page' : 'false'}"><span class="n">${i + 1}</span>${label}</a>`).join('')}</nav>
+    <div class="panel-body">${content}</div>
+  </section>`;
+  paintAssets(root);
+  if (pid === 'website' && tab === 'preview') setWebWidth(390);
+}
+
+function setWebWidth(w) {
+  const f = document.getElementById('webPreview');
+  if (f) f.style.width = `min(100%, ${w}px)`;
+  document.querySelectorAll('[data-action="web-width"]').forEach((b) => b.setAttribute('aria-pressed', String(+b.dataset.v === w)));
+}
+
+
+export async function onAction(act, el) {
+  const s = S();
+  const L = s.platforms.lineOA;
+  switch (act) {
+    case 'line-count': L.count = +el.dataset.v; commit(); return true;
+    case 'line-pages': L.pages = +el.dataset.v; if (L.pages === 1) L.activePage = 0; commit(); return true;
+    case 'line-page': L.activePage = +el.dataset.v; commit(); return true;
+    case 'entries-resync': case 'entries-reset':
+      if (act === 'entries-reset' && L.entriesCustom && !confirm('依服務順序重新產生入口？你手動修改的入口名稱、說明與連結會被取代。')) return true;
+      L.entriesCustom = false; L.entries = entriesFromServices(s); commit(); toast('已依服務順序更新入口'); return true;
+    case 'entries-keep': s.answers.services = L.entries.slice(0, 8).map((e) => e.label).filter(Boolean); commit(); return true;
+    case 'reset-text': delete s.platforms[el.dataset.p].overrides[el.dataset.k]; commit(); toast('已恢復自動產生'); return true;
+    case 'web-width': setWebWidth(+el.dataset.v); return true;
+    case 'goto-q':
+      s.meta.qIndex = Math.max(0, ['traits', 'audience', 'expertise', 'services', 'tone', 'style', 'palette', 'photo', 'avoid', 'naming', 'name', 'display', 'contact'].indexOf(el.dataset.q));
+      save();
+      return false;
+    case 'dl-asset': {
+      const a = assetsFor(el.dataset.p, s).find((x) => x.id === el.dataset.a);
+      busy(el, async () => {
+        const D = await prepare(s);
+        const { blob, ext } = await assetBlob(a, D);
+        download(`${a.file || `${el.dataset.p}-${a.id}`}.${ext}`, blob);
+      });
+      return true;
+    }
+    case 'dl-zip':
+      busy(el, async () => download(`${derive(s).titleName}-${PLATFORM_BY_ID[el.dataset.p].name}-素材包.zip`, await platformZip(s, el.dataset.p)));
+      return true;
+    case 'dl-text': download(`${PLATFORM_BY_ID[el.dataset.p].name}-文案.txt`, textsTxt(s, derive(s), el.dataset.p), 'text/plain;charset=utf-8'); return true;
+    case 'dl-config': download('line-richmenu-config.json', JSON.stringify(richMenuConfig(L, derive(s).titleName), null, 2), 'application/json'); return true;
+    case 'dl-html': {
+      const D = derive(s);
+      download('index.html', websiteHTML(s, D), 'text/html;charset=utf-8');
+      return true;
+    }
+    case 'prompt-copy': { const t = document.getElementById('promptOut'); copyText(t.value, t); return true; }
+    case 'prompt-dl': download(`${PLATFORM_BY_ID[el.dataset.p].name}-提示詞.txt`, document.getElementById('promptOut').value, 'text/plain;charset=utf-8'); return true;
+    case 'prompt-regen': Object.assign(s.platforms[el.dataset.p].prompt, { draft: '', basis: '' }); commit(); toast('已重新生成提示詞'); return true;
+    case 'prompt-keep': { const pr = s.platforms[el.dataset.p].prompt; pr.basis = hash(buildPrompt(s, derive(s), el.dataset.p, pr.extra)); commit(); return true; }
+    default: return false;
+  }
+}
+
+async function busy(btn, fn) {
+  const label = btn.innerHTML;
+  btn.disabled = true;
+  btn.textContent = '準備中…';
+  try {
+    await fn();
+    toast('已開始下載');
+  } catch (e) {
+    console.error(e);
+    toast('下載失敗，請再試一次');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = label;
+  }
+}
+
+export function onInput(el) {
+  const s = S();
+  if (el.dataset.text) {
+    const [pid, key] = el.dataset.text.split(':');
+    const D = derive(s);
+    const f = TEXT_FIELDS[pid].find((x) => x.key === key);
+    if (el.value === f.gen(D)) delete s.platforms[pid].overrides[key];
+    else s.platforms[pid].overrides[key] = el.value.slice(0, 5000);
+    save();
+    const c = document.querySelector(`[data-count="${pid}:${key}"]`);
+    const n = charLen(el.value);
+    if (c) { c.textContent = `${n} / ${f.max} 字${n > f.max ? '・超過平台上限' : ''}`; c.classList.toggle('over', n > f.max); }
+    return true;
+  }
+  if (el.dataset.entry) {
+    const [j, field] = el.dataset.entry.split(':');
+    const L = s.platforms.lineOA;
+    L.entries[+j][field] = el.value.slice(0, field === 'label' ? 20 : field === 'url' ? 2000 : 1000);
+    L.entriesCustom = true;
+    save();
+    const h = document.querySelector(`[data-entry-status="${j}"]`);
+    if (h) h.textContent = entryStatus(L.entries[+j]).text;
+    if (field === 'label') { const sum = el.closest('details')?.querySelector('summary b'); if (sum) sum.textContent = el.value || '未命名'; }
+    return true;
+  }
+  if (el.dataset.pagename !== undefined) {
+    s.platforms.lineOA.pageNames[+el.dataset.pagename] = el.value.slice(0, 12);
+    save();
+    return true;
+  }
+  if (el.dataset.promptExtra) {
+    const pr = s.platforms[el.dataset.promptExtra].prompt;
+    pr.extra = el.value.slice(0, 3000);
+    save();
+    if (!pr.draft) {
+      const out = document.getElementById('promptOut');
+      if (out) out.value = buildPrompt(s, derive(s), el.dataset.promptExtra, pr.extra);
+    }
+    return true;
+  }
+  if (el.dataset.promptDraft) {
+    const pid = el.dataset.promptDraft;
+    const pr = s.platforms[pid].prompt;
+    const gen = buildPrompt(s, derive(s), pid, pr.extra);
+    if (el.value === gen) { pr.draft = ''; pr.basis = ''; } else { pr.draft = el.value.slice(0, 40000); pr.basis = hash(gen); }
+    save();
+    return true;
+  }
+  if (el.dataset.urlField) {
+    const [pid, field] = el.dataset.urlField.split(':');
+    s.platforms[pid][field] = el.value.trim().slice(0, 300);
+    save();
+    return true;
+  }
+  return false;
+}
+
+export function onChange(el) {
+  if (el.dataset.check) {
+    const [pid, id] = el.dataset.check.split(':');
+    S().platforms[pid].checklist[id] = el.checked;
+    commit();
+    return true;
+  }
+  return false;
+}
+
+/** 點擊 LINE 選單預覽：切頁區切頁、服務格顯示功能 */
+export function onCanvasClick(cv, ev) {
+  if (cv.id !== 'rmPreview') return false;
+  const L = S().platforms.lineOA;
+  const r = cv.getBoundingClientRect();
+  const x = ((ev.clientX - r.left) / r.width) * RM_W;
+  const y = ((ev.clientY - r.top) / r.height) * RM_H;
+  const lay = layout(L, L.activePage);
+  const tab = lay.tabs.find((t) => x >= t.x && x < t.x + t.w && y >= t.y && y < t.y + t.h);
+  if (tab) { L.activePage = tab.page; commit(); toast(`已切換到「${tab.name}」`); return true; }
+  const cell = lay.cells.find((c) => x >= c.x && x < c.x + c.w && y >= c.y && y < c.y + c.h);
+  if (cell) {
+    const st = entryStatus(cell.entry);
+    const dlg = document.getElementById('detail');
+    dlg.querySelector('h2').textContent = cell.entry.label || '未命名入口';
+    dlg.querySelector('[data-d="desc"]').textContent = cell.entry.description;
+    dlg.querySelector('[data-d="status"]').textContent = st.text;
+    const a = dlg.querySelector('a');
+    a.hidden = st.kind !== 'link';
+    a.href = safeURL(cell.entry.url) || '#';
+    dlg.showModal();
+  }
+  return true;
+}
+

@@ -1,0 +1,220 @@
+// 由品牌資料推導出「目前要套用的設計結果」：配色、禁忌、照片、名稱、語氣。
+// 也負責自由回答解析與衝突偵測——能解析的轉成設定，不能的明確標示「僅保存」。
+import { PALETTES, HUE_WORDS, HUE_NAMES } from './data/palettes.js';
+import { DESIGN_BY_ID } from './data/designs.js';
+import { hash } from './util.js';
+
+export const AVOID_FLAGS = {
+  過度金色: 'gold', 米白復古配色: 'cream', 古典襯線字體: 'serif', 山景風景意象: 'landscape',
+  卡通可愛: 'cartoon', 過多科技光效: 'glow', 文字擁擠: 'crowded', 制式保險廣告感: 'adcliche',
+};
+const AVOID_TEXT_RULES = [
+  [/金|香檳/, 'gold', '避免金色'],
+  [/米白|米色|復古/, 'cream', '避免米白復古配色'],
+  [/古典|襯線|明體|書法/, 'serif', '避免古典襯線字體'],
+  [/山|風景|夕陽/, 'landscape', '避免山景風景意象'],
+  [/卡通|可愛|Q版/, 'cartoon', '避免卡通可愛'],
+  [/光效|發光|霓虹|炫光/, 'glow', '減少科技光效'],
+  [/擁擠|太多字|字太多/, 'crowded', '文字留白加大'],
+  [/廣告|制式|老套|推銷/, 'adcliche', '避免制式保險廣告感'],
+];
+
+const EXPERTISE_SHORT = { 保單整理: '保單整理', 退休生活與現金流: '退休規劃', 資產傳承: '資產傳承', 企業與家庭風險: '企業與家庭風險', 醫療與長照保障: '醫療長照', 理賠與日常服務: '理賠服務' };
+
+export const PH = (label) => `【待填：${label}】`;
+export const isPH = (s) => /【待填：/.test(String(s));
+
+function huesIn(text) {
+  const out = new Set();
+  for (const [re, hue] of HUE_WORDS) if (re.test(text)) out.add(hue);
+  return [...out];
+}
+
+/** 若沒選任何選項但有寫文字，以文字作為答案（允許純文字回答） */
+export function valuesOrText(state, qid, maxLen = 16) {
+  const a = state.answers[qid] || [];
+  if (a.length) return a.filter((v) => v !== '不限定' && v !== '沒有特別限制');
+  const t = (state.freeform[qid] || '').trim();
+  return t ? [t.split(/[，,、\n]/)[0].slice(0, maxLen)] : [];
+}
+
+function avoidInfo(state) {
+  const flags = new Set();
+  const applied = [];
+  for (const v of state.answers.avoid) if (AVOID_FLAGS[v]) flags.add(AVOID_FLAGS[v]);
+  const text = state.freeform.avoid || '';
+  for (const [re, flag, label] of AVOID_TEXT_RULES)
+    if (re.test(text) && !flags.has(flag)) {
+      flags.add(flag);
+      applied.push(label);
+    }
+  const hues = new Set(huesIn(text));
+  if (flags.has('gold')) hues.add('gold');
+  if (flags.has('cream')) hues.add('cream');
+  return { flags, hues, applied };
+}
+
+const conflictsWith = (palette, avoidHues) => palette.hues.filter((h) => avoidHues.has(h));
+
+function autoPalette(state, avoidHues) {
+  const style = state.answers.style[0];
+  const traits = state.answers.traits;
+  let pick = { 專業科技: 'electric', 簡潔俐落: 'graphite', 沉穩精緻: 'ocean', 親切自然: 'forest' }[style];
+  if (!pick) pick = traits.some((t) => /親切|溫度/.test(t)) ? 'forest' : traits.includes('年輕有活力') ? 'coral' : 'electric';
+  const ordered = [PALETTES.find((p) => p.id === pick), ...PALETTES];
+  return ordered.find((p) => !conflictsWith(p, avoidHues).length) || PALETTES[0];
+}
+
+/** 偵測選項與自由文字的衝突。回傳 [{id, qid, message, optionLabel, textLabel}] */
+export function detectConflicts(state) {
+  const out = [];
+  const { hues } = avoidInfo(state);
+  const palId = state.answers.palette[0];
+  const pal = PALETTES.find((p) => p.id === palId);
+  if (pal) {
+    const bad = conflictsWith(pal, hues);
+    if (bad.length)
+      out.push({ id: 'palette-avoid', qid: 'palette', message: `你選的色卡「${pal.name}」包含你想避免的${bad.map((h) => HUE_NAMES[h]).join('、')}。`, optionLabel: '保留這組色卡', textLabel: '改用不衝突的配色' });
+    const want = huesIn((state.freeform.palette || '').replace(/不要[^，。,]*/g, ''));
+    const missing = want.filter((h) => !pal.hues.includes(h) && !hues.has(h));
+    if (missing.length)
+      out.push({ id: 'palette-pref', qid: 'palette', message: `你的文字提到${missing.map((h) => HUE_NAMES[h]).join('、')}，但選的色卡沒有這個顏色。`, optionLabel: '以色卡為準', textLabel: '以文字為準（找相近配色）' });
+  }
+  const photoOpt = state.answers.photo[0];
+  if (/不(要|放|想|露)[^，。]{0,4}(照片|臉|本人)|不露臉/.test(state.freeform.photo || '') && ['醒目呈現', '適度呈現'].includes(photoOpt))
+    out.push({ id: 'photo-none', qid: 'photo', message: `你選了「${photoOpt}」，但文字寫到不想放照片。`, optionLabel: `照片${photoOpt}`, textLabel: '不放照片' });
+  return out;
+}
+
+export const resolved = (state, id) => state.resolutions[id];
+
+/** 每題的自由回答解析結果（給 UI 顯示「已轉成設定／僅保存」） */
+export function parseReport(state, qid) {
+  const text = (state.freeform[qid] || '').trim();
+  if (!text) return null;
+  const applied = [];
+  if (qid === 'avoid') applied.push(...avoidInfo(state).applied, ...huesIn(text).map((h) => `避開${HUE_NAMES[h]}的配色`));
+  if (qid === 'tone' && text.length >= 8) applied.push('作為 LINE 歡迎訊息與各平台開場語氣');
+  if (['traits', 'audience', 'expertise'].includes(qid) && !state.answers[qid].length) applied.push('沒有選選項，直接以你的文字作為答案');
+  if (qid === 'palette' && huesIn(text).length) applied.push('已比對色系');
+  if (qid === 'photo' && /不(要|放|想|露)/.test(text)) applied.push('已比對照片偏好');
+  return { applied: [...new Set(applied)], saved: true };
+}
+
+function resolvePalette(state, avoid) {
+  const id = state.answers.palette[0];
+  const pal = PALETTES.find((p) => p.id === id);
+  if (!pal) return { ...autoPalette(state, avoid.hues), auto: true };
+  if (conflictsWith(pal, avoid.hues).length && resolved(state, 'palette-avoid') === 'text') return { ...autoPalette(state, avoid.hues), auto: true };
+  if (resolved(state, 'palette-pref') === 'text') {
+    const want = huesIn(state.freeform.palette || '');
+    const alt = PALETTES.find((p) => want.some((h) => p.hues.includes(h)) && !conflictsWith(p, avoid.hues).length);
+    if (alt) return { ...alt, auto: true };
+  }
+  return pal;
+}
+
+function resolvePhotoMode(state) {
+  const opt = state.answers.photo[0];
+  if (opt === '不放照片') return 'none';
+  if (detectConflicts(state).some((c) => c.id === 'photo-none') && resolved(state, 'photo-none') === 'text') return 'none';
+  if (!state.photo) return 'none';
+  if (opt === '醒目呈現') return 'hero';
+  return 'moderate';
+}
+
+function resolveTone(state) {
+  const t = state.answers.tone[0];
+  if (t && t !== '交由系統建議') return t;
+  const tr = state.answers.traits;
+  if (tr.some((x) => /親切|溫度|沉穩/.test(x))) return '穩重親切';
+  if (tr.includes('思路清楚有效率')) return '簡短俐落';
+  return '專業直接';
+}
+
+export function positioningOf(state) {
+  if (state.identity.positioning.trim()) return state.identity.positioning.trim();
+  const ex = valuesOrText(state, 'expertise').map((e) => EXPERTISE_SHORT[e] || e);
+  return ex.length ? ex.join('・') : '保險規劃服務';
+}
+
+/** 給素材與文案使用的完整推導資料 */
+export function derive(state, designId = state.selectedDesignId) {
+  const avoid = avoidInfo(state);
+  const palette = resolvePalette(state, avoid);
+  const id = state.identity;
+  const brandName = id.brandName.trim();
+  const personName = id.personName.trim();
+  const positioning = positioningOf(state);
+  const titleName = brandName || personName || '你的品牌';
+  const display = state.answers.display[0] || '交由系統建議';
+  const displayName =
+    display === '姓名' ? personName || PH('姓名')
+    : display === '姓名加定位' ? `${personName || PH('姓名')}｜${positioning}`
+    : display === '個人品牌名稱' ? brandName || PH('品牌名稱')
+    : brandName || personName || PH('品牌名稱');
+  const design = DESIGN_BY_ID[designId] || DESIGN_BY_ID.tech;
+  return {
+    brandName, personName, titleName, displayName, positioning,
+    nameIsPlaceholder: !brandName && !personName,
+    jobTitle: id.jobTitle.trim(),
+    slogan: id.slogan.trim(),
+    traits: valuesOrText(state, 'traits'),
+    audience: valuesOrText(state, 'audience', 20),
+    expertise: valuesOrText(state, 'expertise', 20),
+    services: state.platforms.lineOA.entries,
+    tone: resolveTone(state),
+    toneText: (state.freeform.tone || '').trim().length >= 8 ? state.freeform.tone.trim() : '',
+    palette,
+    design,
+    avoid: avoid.flags,
+    avoidHues: avoid.hues,
+    photo: state.photo,
+    photoMode: resolvePhotoMode(state),
+    contact: id.contact,
+    freeform: state.freeform,
+    designNotes: state.designNotes,
+  };
+}
+
+export function avoidSummary(D) {
+  const map = { gold: '不使用金色', cream: '不使用米白復古配色', serif: '只用現代無襯線字體', landscape: '不使用山景風景意象', cartoon: '不使用卡通可愛元素', glow: '不加光暈與發光效果', crowded: '加大留白、每塊只放重點', adcliche: '避免制式保險廣告用語與畫面' };
+  return [...D.avoid].map((f) => map[f]).filter(Boolean);
+}
+
+// ---------- 命名與標語提案 ----------
+const NAME_BANK = {
+  穩健安心: ['恆安', '守和', '安序', '穩衡', '實安', '恆心', '和序', '守恆', '安澄', '穩行'],
+  理性前瞻: ['衡遠', '明序', '遠見', '策遠', '明衡', '知遠', '序遠', '見度', '衡策', '明遠'],
+  人生從容: ['從容', '悠然', '自在', '餘裕', '和光', '緩行', '安步', '好日', '從序', '寬心'],
+};
+
+export function nameProposals(state) {
+  const dir = state.answers.naming[0];
+  const pool = dir && NAME_BANK[dir] ? NAME_BANK[dir] : [...NAME_BANK.穩健安心, ...NAME_BANK.理性前瞻, ...NAME_BANK.人生從容];
+  const seed = parseInt(hash(state.answers.expertise.join() + state.answers.traits.join() + state.namingSeed), 36);
+  const picks = [];
+  for (let i = 0; picks.length < 3 && i < pool.length * 2; i++) {
+    const n = pool[(seed + i * 7) % pool.length];
+    if (!picks.includes(n)) picks.push(n);
+  }
+  return picks;
+}
+
+const SLOGAN_BANK = [
+  [/退休/, ['把退休，提早想清楚', '讓退休生活有底氣']],
+  [/企業|風險/, ['經營向前，風險先看清', '公司與家庭，分開看清楚']],
+  [/保單/, ['看懂保障，再做決定', '把保單整理成一張清楚的地圖']],
+  [/傳承/, ['把重要的，好好交棒']],
+  [/醫療|長照/, ['先準備，照顧才從容']],
+  [/理賠|服務/, ['需要的時候，有人陪你走']],
+];
+const SLOGAN_BY_DIR = { 穩健安心: '穩穩規劃，安心向前', 理性前瞻: '想清楚，再往前', 人生從容: '從容，來自提早準備' };
+
+export function sloganProposals(state) {
+  const ex = state.answers.expertise.join(' ') + ' ' + (state.freeform.expertise || '');
+  const out = [];
+  for (const [re, list] of SLOGAN_BANK) if (re.test(ex)) out.push(...list);
+  out.push(SLOGAN_BY_DIR[state.answers.naming[0]] || '想清楚，再往前');
+  return [...new Set(out)].slice(0, 3);
+}
