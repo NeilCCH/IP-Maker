@@ -3,7 +3,8 @@
 import { QUESTIONS, SERVICE_CATALOG } from './data/questions.js';
 import { PALETTES } from './data/palettes.js';
 import { DESIGN_BY_ID } from './data/designs.js';
-import { str, strArr } from './util.js';
+import { str, strArr, safeURL } from './util.js';
+import { defaultType, ENTRY_TYPES } from './entries.js';
 
 export const SCHEMA_VERSION = 2;
 export const STORAGE_KEY = 'brand-studio-v2';
@@ -39,6 +40,7 @@ export function fresh() {
   Object.assign(s.platforms.lineOA, { pages: 1, count: 8, activePage: 0, pageNames: ['我的服務', '更多資源'], entries: [], entriesCustom: false });
   s.platforms.website.publishedUrl = '';
   s.platforms.lineOA.oaUrl = '';
+  s.platforms.lineOA.forms = { form: '', edit: '', sheet: '' };
   syncEntries(s);
   return s;
 }
@@ -50,7 +52,7 @@ export function entriesFromServices(state) {
   const list = chosen.map((label) => ({ label, description: catalog[label] || '自訂服務：請補充說明', url: '' }));
   for (const label of DEFAULT_SERVICE_ORDER) if (!list.some((e) => e.label === label)) list.push({ label, description: catalog[label], url: '' });
   for (const e of EXTRA_ENTRIES) if (!list.some((x) => x.label === e.label)) list.push({ ...e, url: '' });
-  return list.slice(0, 16);
+  return list.slice(0, 16).map((e) => ({ ...e, type: defaultType(e.label), reply: '' }));
 }
 
 export function syncEntries(state) {
@@ -84,8 +86,13 @@ function sanitizePlatform(src, base) {
   return out;
 }
 
+const TYPE_IDS = ENTRY_TYPES.map((t) => t.id);
 function sanitizeEntry(e) {
-  return { label: str(e?.label, 20), description: str(e?.description, 1000), url: str(e?.url, 2000) };
+  const label = str(e?.label, 20);
+  const url = str(e?.url, 2000);
+  // 舊資料沒有類型：有網址視為連結，否則依名稱給預設類型
+  const type = TYPE_IDS.includes(e?.type) ? e.type : safeURL(url) ? 'link' : defaultType(label);
+  return { label, description: str(e?.description, 1000), url, type, reply: str(e?.reply, 2000) };
 }
 
 export function sanitize(x) {
@@ -120,6 +127,9 @@ export function sanitize(x) {
   if (Array.isArray(L.pageNames)) line.pageNames = [str(L.pageNames[0], 12) || '我的服務', str(L.pageNames[1], 12) || '更多資源'];
   line.entriesCustom = L.entriesCustom === true;
   line.oaUrl = str(L.oaUrl, 300);
+  const fm = L.forms || {};
+  const gurl = (u) => (/^https:\/\/(docs\.google\.com|forms\.gle)\//.test(String(u || '')) ? str(u, 1000) : '');
+  line.forms = { form: gurl(fm.form), edit: gurl(fm.edit), sheet: gurl(fm.sheet) };
   if (line.entriesCustom && Array.isArray(L.entries)) {
     const base = entriesFromServices(n);
     line.entries = base.map((b, i) => (L.entries[i] && typeof L.entries[i] === 'object' ? sanitizeEntry(L.entries[i]) : b));

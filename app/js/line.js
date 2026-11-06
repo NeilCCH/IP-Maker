@@ -1,6 +1,7 @@
 // LINE 圖文選單：版面座標是唯一來源，PNG、點擊區設定檔、對照圖都用同一套計算。
 // 規格依 LINE Messaging API（richmenu 2500×1686、areas ≤20、action label ≤20 字），實作前應再查核官方最新文件。
 import { safeURL } from './util.js';
+import { TYPE_NAME, LINE_URI_MAX } from './entries.js';
 
 export const RM_W = 2500;
 export const RM_H = 1686;
@@ -25,17 +26,26 @@ export function layout(line, p) {
 
 export const aliasId = (p) => `brand-page-${p + 1}`;
 
+const usesUrl = (e) => e.type === 'form' || e.type === 'link';
+const validUri = (e) => { const u = safeURL(e.url); return u && u.length <= LINE_URI_MAX ? u : null; };
+
+/** 表單／連結且網址有效 → 開啟網址；其他 → 送出入口名稱文字（對應後台自動回應的關鍵字） */
 export function entryAction(e) {
   const label = (e.label || '服務').slice(0, 20);
-  const uri = safeURL(e.url);
+  const uri = usesUrl(e) ? validUri(e) : null;
   return uri ? { type: 'uri', label, uri } : { type: 'message', label, text: (e.label || '我想留言').slice(0, 300) };
 }
 
 /** 每個入口目前的狀態：連結 / 文字回覆（需在後台設定關鍵字回應） */
 export function entryStatus(e) {
-  if (e.url && !safeURL(e.url)) return { kind: 'invalid', text: '網址格式不正確（只接受 https:// 開頭）' };
-  if (safeURL(e.url)) return { kind: 'link', text: '點擊開啟連結' };
-  return { kind: 'pending', text: `待設定：點擊會送出「${(e.label || '').slice(0, 20)}」，需在後台設定對應的自動回應` };
+  const kw = (e.label || '').slice(0, 20);
+  if (usesUrl(e)) {
+    if (e.url && !safeURL(e.url)) return { kind: 'invalid', text: '網址格式不正確（只接受 https:// 開頭）' };
+    if (e.url && safeURL(e.url).length > LINE_URI_MAX) return { kind: 'invalid', text: `網址太長（LINE 上限 ${LINE_URI_MAX} 字元）` };
+    if (safeURL(e.url)) return { kind: 'link', text: `${TYPE_NAME[e.type]}：點擊開啟網址` };
+    return { kind: 'pending', text: `待設定：還沒有${e.type === 'form' ? '表單' : ''}網址，目前點擊會送出「${kw}」` };
+  }
+  return { kind: 'reply', text: `${TYPE_NAME[e.type] || '文字回覆'}：點擊會送出「${kw}」，需在後台把關鍵字「${kw}」設定為自動回應` };
 }
 
 export function richMenuBody(line, p, brandName) {

@@ -6,7 +6,8 @@ import { buildPrompt } from '../prompt.js';
 import { layout, pageEntries, entryStatus, richMenuConfig, RM_W, RM_H } from '../line.js';
 import { entriesOutOfSync, entriesFromServices } from '../model.js';
 import { websiteHTML } from '../website.js';
-import { prepare, assetBlob, platformZip, textsTxt, guideDynamic } from '../export.js';
+import { prepare, assetBlob, platformZip, textsTxt, guideDynamic, replyList } from '../export.js';
+import { ENTRY_TYPES, TYPE_NAME, replyValue, generateReply, formScript, formManual, formEntries, parseFormResult, LINE_REPLY_MAX } from '../entries.js';
 import { store, commit, save } from '../store.js';
 import { esc, toast, download, copyText, hash, safeURL, charLen } from '../util.js';
 import { icon, badge, paintAssets, assetFigure } from './common.js';
@@ -92,16 +93,33 @@ function lineEditor() {
   <div class="card">
     <h3>服務入口</h3>
     ${L.pages === 2 ? `<div class="row">${[0, 1].map((i) => `<button type="button" class="chip" data-action="line-page" data-v="${i}" aria-pressed="${p === i}">編輯：${esc(L.pageNames[i])}</button>`).join('')}</div>` : ''}
-    <div class="entries">${pageEntries(L, p).map((e, i) => {
-      const j = p * 8 + i, st = entryStatus(e);
-      return `<details class="entry" ${i === 0 ? 'open' : ''}><summary><span class="num">${i + 1}</span><b>${esc(e.label || '未命名')}</b><span class="st ${st.kind === 'link' ? 'st-done' : st.kind === 'invalid' ? 'st-err' : 'st-todo'}">${st.kind === 'link' ? '連結' : st.kind === 'invalid' ? '網址有誤' : '待設定'}</span></summary>
-        <label class="field"><span>入口名稱（顯示在選單上，建議 4–5 字）</span><input data-entry="${j}:label" maxlength="20" value="${esc(e.label)}"></label>
-        <label class="field"><span>功能說明／回覆內容</span><textarea data-entry="${j}:description" rows="2" maxlength="1000">${esc(e.description)}</textarea></label>
-        <label class="field"><span>連結（選填：Google 表單、日曆預約頁、你的網頁…）</span><input data-entry="${j}:url" type="url" inputmode="url" maxlength="2000" placeholder="https://" value="${esc(e.url)}"></label>
-        <p class="hint" data-entry-status="${j}">${esc(st.text)}</p></details>`;
-    }).join('')}</div>
+    <p class="hint">每一格選一種功能。系統已先依入口名稱配好，回覆文字也寫好了，可以直接修改。</p>
+    <div class="entries">${pageEntries(L, p).map((e, i) => entryEditor(e, p * 8 + i, i)).join('')}</div>
     <button type="button" class="link-btn" data-action="entries-reset">依第一步的服務順序重新產生入口</button>
   </div>`;
+}
+
+function entryBadge(e) {
+  const st = entryStatus(e);
+  const [cls, text] = st.kind === 'link' ? ['st-done', '已連結'] : st.kind === 'invalid' ? ['st-err', '網址有誤'] : st.kind === 'pending' ? ['st-todo', e.type === 'form' ? '待建表單' : '待貼網址'] : ['st-todo', '待設定回應'];
+  return `<span class="st ${cls}">${text}</span>`;
+}
+
+function entryEditor(e, j, i) {
+  const D = derive(S());
+  const st = entryStatus(e);
+  const reply = replyValue(D, e, S());
+  const rl = [...reply].length;
+  const usesReply = e.type === 'reply' || e.type === 'chat';
+  return `<details class="entry" ${i === 0 ? 'open' : ''}><summary><span class="num">${i + 1}</span><b>${esc(e.label || '未命名')}</b><span class="type-tag">${esc(TYPE_NAME[e.type])}</span>${entryBadge(e)}</summary>
+    <label class="field"><span>入口名稱（顯示在選單上，建議 4–5 字）</span><input data-entry="${j}:label" maxlength="20" value="${esc(e.label)}"></label>
+    <div class="field"><span class="flabel">按下去之後</span><div class="type-pick" role="radiogroup" aria-label="${esc(e.label)} 的功能">${ENTRY_TYPES.map((t) => `<button type="button" class="chip" role="radio" data-action="entry-type" data-i="${j}" data-v="${t.id}" aria-checked="${e.type === t.id}" aria-pressed="${e.type === t.id}">${t.name}</button>`).join('')}</div>
+      <p class="hint">${esc(ENTRY_TYPES.find((t) => t.id === e.type).hint)}</p></div>
+    ${usesReply ? `<div class="field"><label for="r-${j}">客人會收到的文字</label><textarea id="r-${j}" data-entry="${j}:reply" rows="6" maxlength="2000">${esc(reply)}</textarea>
+      <div class="field-foot"><span class="count ${rl > LINE_REPLY_MAX ? 'over' : ''}" data-reply-count="${j}">${rl} / ${LINE_REPLY_MAX} 字</span>${e.reply ? `<span class="st st-todo">已手動修改</span><button type="button" class="link-btn" data-action="entry-reply-reset" data-i="${j}">恢復自動產生</button>` : '<span class="st st-none">系統產生</span>'}</div></div>` : ''}
+    ${e.type === 'form' || e.type === 'link' ? `<label class="field"><span>${e.type === 'form' ? '表單網址（建立表單後會自動填入，也可以手動貼上）' : '網址'}</span><input data-entry="${j}:url" type="url" inputmode="url" maxlength="2000" placeholder="https://" value="${esc(e.url)}"></label>
+      ${e.type === 'form' && !e.url ? '<p class="hint">到「設定引導」的「建立需求表單」步驟，一次建好所有表單入口。</p>' : ''}` : ''}
+    <p class="hint" data-entry-status="${j}">${esc(st.text)}</p></details>`;
 }
 
 function editTab(pid, D) {
@@ -143,12 +161,45 @@ function guideTab(pid) {
   return `<div class="card"><h3>完成狀態</h3><ul class="status-list">${st.map((x) => `<li>${badge(x.status, x.text)}<span>${esc(x.label)}</span></li>`).join('')}</ul>
     <p class="hint">「已完成」只代表系統產出素材或你自己確認；APP 不會替你登入、發文或宣稱已串接。</p></div>
     <ol class="guide">${P.guide.map((g, i) => `<li class="card"><div class="g-head"><span class="step-no">${i + 1}</span><h3>${esc(g.title)}</h3></div>
-      <p class="pre">${esc(g.body || guideDynamic(S(), g))}</p>
+      ${g.dynamic === 'forms' ? formsGuide() : g.dynamic === 'replies' ? repliesGuide() : `<p class="pre">${esc(g.body || guideDynamic(S(), g))}</p>`}
       ${g.link ? `<p><a href="${esc(g.link)}" target="_blank" rel="noopener noreferrer">打開官方頁面 ↗</a></p>` : ''}
       ${g.check ? `<label class="check"><input type="checkbox" data-check="${pid}:${g.check}" ${pl.checklist[g.check] ? 'checked' : ''}> 我已完成這一步</label>` : ''}</li>`).join('')}</ol>
     <div class="card"><h3>測試</h3><p>${esc(P.test.label)}</p>
       ${urlField ? `<label class="field"><span>${pid === 'website' ? '我的網頁網址' : '官方帳號加好友網址'}</span><input type="url" inputmode="url" data-url-field="${pid}:${urlField}" value="${esc(pl[urlField] || '')}" placeholder="https://"></label>
       ${safeURL(pl[urlField]) ? `<p><a class="btn ghost" href="${esc(safeURL(pl[urlField]))}" target="_blank" rel="noopener noreferrer">打開測試 ↗</a></p>` : '<p class="hint">完成上線後貼上網址，就能從這裡打開測試。</p>'}` : ''}</div>`;
+}
+
+function formsGuide() {
+  const s = S();
+  const L = s.platforms.lineOA;
+  const list = formEntries(L);
+  if (!list.length) return '<p>目前沒有入口使用「需求表單」，可以跳過這一步。想加的話，到「修改」頁把某一格改成需求表單。</p>';
+  const done = list.filter((e) => e.url).length;
+  return `<p>有 <b>${list.length}</b> 個入口使用需求表單：${list.map((e) => `<span class="tag">${esc(e.label)}${e.url ? ' ✓' : ''}</span>`).join(' ')}</p>
+    <p>系統會在<b>你自己的</b> Google 帳號建立一份表單和回覆試算表，免費，資料只在你的帳號裡。</p>
+    <ol class="small-steps">
+      <li><button type="button" class="btn primary sm" data-action="copy-form-script">複製建立程式</button></li>
+      <li>打開 <a href="https://script.google.com/home/projects/create" target="_blank" rel="noopener noreferrer">Google Apps Script 新專案 ↗</a>（用你的 Google 帳號登入）</li>
+      <li>刪掉畫面上原本的文字，貼上剛才複製的程式，按上方的 <b>「執行」</b></li>
+      <li>第一次會要求授權：Google 會提醒「尚未驗證」，因為這是你自己的程式。點 <b>「進階」→「前往」→「允許」</b></li>
+      <li>執行完，畫面下方「執行記錄」會出現一段以 <code>BRAND-STUDIO-RESULT</code> 開頭的文字，<b>全部複製</b>，貼到下面</li>
+    </ol>
+    <label class="field"><span>貼上執行記錄</span><textarea id="formResult" rows="4" placeholder="BRAND-STUDIO-RESULT&#10;預約諮詢|https://docs.google.com/forms/..."></textarea></label>
+    <button type="button" class="btn ghost" data-action="apply-forms">套用到選單入口</button>
+    ${done ? `<p class="parse"><span class="ok">已填入 ${done} / ${list.length} 個表單網址</span></p>` : ''}
+    ${L.forms.edit || L.forms.sheet ? `<p class="row">${L.forms.edit ? `<a class="btn ghost sm" href="${esc(L.forms.edit)}" target="_blank" rel="noopener noreferrer">編輯表單 ↗</a>` : ''}${L.forms.sheet ? `<a class="btn ghost sm" href="${esc(L.forms.sheet)}" target="_blank" rel="noopener noreferrer">看回覆試算表 ↗</a>` : ''}</p>` : ''}
+    <details><summary>不想用程式？改用手動建立</summary><p class="pre">${esc(formManual(s, derive(s)))}</p><button type="button" class="btn ghost sm" data-action="copy-form-manual">複製題目清單</button></details>
+    <p class="hint">建好表單後，選單圖片要重新上傳一次，新的網址才會生效。</p>`;
+}
+
+function repliesGuide() {
+  const s = S();
+  const rows = replyList(s, derive(s));
+  if (!rows.length) return '<p>所有入口都是連結或表單，不需要設定自動回應。</p>';
+  return `<p>LINE 官方帳號後台 →「自動回應訊息」→「建立」。每一筆：關鍵字貼左邊，回應內容貼右邊。共 <b>${rows.length}</b> 筆。</p>
+    <p class="hint">也要確認後台「回應設定」裡的「自動回應訊息」是開啟的。</p>
+    <ul class="reply-list">${rows.map((r, i) => `<li><div class="kw"><span class="label">關鍵字</span><b>${esc(r.keyword)}</b><button type="button" class="btn ghost sm" data-action="copy-kw" data-i="${i}">複製</button></div>
+      <div class="rp"><span class="label">回應內容</span><p class="pre">${esc(r.reply)}</p><button type="button" class="btn ghost sm" data-action="copy-reply" data-i="${i}">複製</button></div></li>`).join('')}</ul>`;
 }
 
 // ---------- 主畫面 ----------
@@ -193,6 +244,31 @@ export async function onAction(act, el) {
     case 'entries-keep': s.answers.services = L.entries.slice(0, 8).map((e) => e.label).filter(Boolean); commit(); return true;
     case 'reset-text': delete s.platforms[el.dataset.p].overrides[el.dataset.k]; commit(); toast('已恢復自動產生'); return true;
     case 'web-width': setWebWidth(+el.dataset.v); return true;
+    case 'entry-type': {
+      const e = L.entries[+el.dataset.i];
+      e.type = el.dataset.v;
+      L.entriesCustom = true;
+      commit();
+      return true;
+    }
+    case 'entry-reply-reset': L.entries[+el.dataset.i].reply = ''; commit(); toast('已恢復自動產生'); return true;
+    case 'copy-form-script': copyText(formScript(s, derive(s))); return true;
+    case 'copy-form-manual': copyText(formManual(s, derive(s))); return true;
+    case 'copy-kw': copyText(replyList(s, derive(s))[+el.dataset.i].keyword); return true;
+    case 'copy-reply': copyText(replyList(s, derive(s))[+el.dataset.i].reply); return true;
+    case 'apply-forms': {
+      const text = document.getElementById('formResult')?.value || '';
+      const r = parseFormResult(text, L);
+      if (!r) { toast('找不到 BRAND-STUDIO-RESULT，請複製完整的執行記錄'); return true; }
+      if (!r.matched.length && !r.form) { toast('沒有找到可用的表單網址，請確認貼上的是完整執行記錄'); return true; }
+      L.forms = { form: r.form || L.forms.form, edit: r.edit || L.forms.edit, sheet: r.sheet || L.forms.sheet };
+      // 沒有對應預填網址的表單入口，使用表單主網址
+      if (r.form) for (const e of formEntries(L)) if (!e.url) { e.url = r.form; r.matched.push(e.label); }
+      L.entriesCustom = true;
+      commit();
+      toast(`已填入 ${r.matched.length} 個入口的表單網址${r.unmatched.length ? `；${r.unmatched.length} 個名稱對不上，請手動貼上` : ''}`);
+      return true;
+    }
     case 'goto-q':
       s.meta.qIndex = Math.max(0, ['traits', 'audience', 'expertise', 'services', 'tone', 'style', 'palette', 'photo', 'avoid', 'naming', 'name', 'display', 'contact'].indexOf(el.dataset.q));
       save();
@@ -257,6 +333,16 @@ export function onInput(el) {
   if (el.dataset.entry) {
     const [j, field] = el.dataset.entry.split(':');
     const L = s.platforms.lineOA;
+    if (field === 'reply') {
+      const e = L.entries[+j];
+      e.reply = el.value === generateReply(derive(s), { ...e, reply: '' }, s) ? '' : el.value.slice(0, 2000);
+      L.entriesCustom = true;
+      save();
+      const c = document.querySelector(`[data-reply-count="${j}"]`);
+      const n = charLen(el.value);
+      if (c) { c.textContent = `${n} / ${LINE_REPLY_MAX} 字`; c.classList.toggle('over', n > LINE_REPLY_MAX); }
+      return true;
+    }
     L.entries[+j][field] = el.value.slice(0, field === 'label' ? 20 : field === 'url' ? 2000 : 1000);
     L.entriesCustom = true;
     save();
@@ -320,9 +406,12 @@ export function onCanvasClick(cv, ev) {
   const cell = lay.cells.find((c) => x >= c.x && x < c.x + c.w && y >= c.y && y < c.y + c.h);
   if (cell) {
     const st = entryStatus(cell.entry);
+    const e = cell.entry;
     const dlg = document.getElementById('detail');
-    dlg.querySelector('h2').textContent = cell.entry.label || '未命名入口';
-    dlg.querySelector('[data-d="desc"]').textContent = cell.entry.description;
+    dlg.querySelector('h2').textContent = `${e.label || '未命名入口'}（${TYPE_NAME[e.type]}）`;
+    const desc = dlg.querySelector('[data-d="desc"]');
+    desc.classList.add('pre');
+    desc.textContent = e.type === 'reply' || e.type === 'chat' ? `客人會收到：\n${replyValue(derive(S()), e, S())}` : e.description;
     dlg.querySelector('[data-d="status"]').textContent = st.text;
     const a = dlg.querySelector('a');
     a.hidden = st.kind !== 'link';

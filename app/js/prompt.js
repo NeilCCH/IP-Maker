@@ -6,6 +6,7 @@ import { QUESTIONS } from './data/questions.js';
 import { pageEntries } from './line.js';
 import { entryStatus } from './line.js';
 import { hash } from './util.js';
+import { TYPE_NAME, replyValue } from './entries.js';
 
 const list = (a) => (a && a.length ? a.join('、') : '（未填）');
 
@@ -13,7 +14,7 @@ function platformConfig(state, D, pid) {
   if (pid === 'lineOA') {
     const L = state.platforms.lineOA;
     const pages = Array.from({ length: L.pages }, (_, p) => {
-      const rows = pageEntries(L, p).map((e, i) => `  ${i + 1}. ${e.label}｜${e.description}｜${entryStatus(e).text}${e.url ? `｜${e.url}` : ''}`);
+      const rows = pageEntries(L, p).map((e, i) => `  ${i + 1}. ${e.label}｜${TYPE_NAME[e.type]}｜${e.description}｜${entryStatus(e).text}${e.url ? `｜${e.url}` : ''}${e.type === 'reply' || e.type === 'chat' ? `\n     回覆：${replyValue(D, e, state).replace(/\n/g, ' / ')}` : ''}`);
       return `第 ${p + 1} 頁「${L.pageNames[p]}」：\n${rows.join('\n')}`;
     });
     return [

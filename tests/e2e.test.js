@@ -249,6 +249,52 @@ const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'brand-e2e-'));
     assert((await page.textContent('.entries')).includes('待設定'), '未顯示待設定');
   });
 
+  await test('入口內容：預設類型、回覆文字、表單程式、貼回網址', async () => {
+    const r = await page.evaluate(async ([m, e, l, b]) => {
+      const M = await import(m); const E = await import(e); const L = await import(l); const B = await import(b);
+      const st = M.sampleHengYuan();
+      const line = st.platforms.lineOA;
+      const types = Object.fromEntries(line.entries.slice(0, 8).map((x) => [x.label, x.type]));
+      const D = B.derive(st);
+      const replies = line.entries.slice(0, 8).filter((x) => x.type === 'reply' || x.type === 'chat').map((x) => E.replyValue(D, x, st));
+      const script = E.formScript(st, D);
+      const forms = E.formEntries(line).map((x) => x.label);
+      const before = L.entryAction(line.entries.find((x) => x.type === 'form'));
+      const result = ['下午3:01:02\t資訊\tBRAND-STUDIO-RESULT', ...forms.map((f, i) => `${f}|https://docs.google.com/forms/d/e/ABC${i}/viewform?usp=pp_url&entry.1=${encodeURIComponent(f)}`), '@表單|https://docs.google.com/forms/d/e/ABC/viewform', '@回覆試算表|https://docs.google.com/spreadsheets/d/XYZ/edit', '惡意|javascript:alert(1)'].join('\n');
+      const parsed = E.parseFormResult(result, line);
+      const after = L.entryAction(line.entries.find((x) => x.type === 'form'));
+      return { types, replies, script, forms, before, parsed, after, bad: E.parseFormResult('隨便的文字', line) };
+    }, [mod('model.js'), mod('entries.js'), mod('line.js'), mod('brand.js')]);
+    assert(r.types['預約諮詢'] === 'form' && r.types['留言給我'] === 'chat' && r.types['認識衡遠'] === 'reply', `預設類型錯誤 ${JSON.stringify(r.types)}`);
+    assert(r.replies.length >= 4 && r.replies.every((t) => t.trim().length > 10), '回覆文字缺少');
+    assert(r.replies.some((t) => t.includes('【待填')), '未知資料沒有用待填');
+    assert(r.script.includes('FormApp.create') && r.script.includes('toPrefilledUrl') && r.script.includes('個人資料使用同意'), '表單程式內容不完整');
+    for (const f of r.forms) assert(r.script.includes(f), `表單程式缺少入口 ${f}`);
+    assert(!/token|Bearer|apiKey/i.test(r.script), '表單程式含憑證字樣');
+    assert(r.before.type === 'message', '沒有網址的表單入口不應開啟網址');
+    assert(r.parsed.matched.length === r.forms.length && r.parsed.sheet.includes('spreadsheets'), '貼回結果未對應到入口');
+    assert(r.after.type === 'uri' && r.after.uri.startsWith('https://docs.google.com/forms/'), '貼回後選單動作未改為表單網址');
+    assert(r.bad === null, '無效的貼上內容沒有被拒絕');
+  });
+
+  await test('設定引導：自動回應清單可逐筆複製；表單步驟可貼回套用', async () => {
+    await page.evaluate(async (u) => { const m = await import(u); localStorage.setItem('brand-studio-v2', JSON.stringify(m.sampleHengYuan())); }, mod('model.js'));
+    await go('#/results/lineOA/guide');
+    const n = (await page.$$('.reply-list li')).length;
+    assert(n >= 4, `自動回應清單只有 ${n} 筆`);
+    assert(await page.isVisible('[data-action="copy-form-script"]'), '沒有複製表單程式按鈕');
+    const forms = await page.evaluate(async (u) => { const E = await import(u); return E.formEntries(JSON.parse(localStorage.getItem('brand-studio-v2')).platforms.lineOA).map((x) => x.label); }, mod('entries.js'));
+    await page.fill('#formResult', ['BRAND-STUDIO-RESULT', ...forms.map((f) => `${f}|https://docs.google.com/forms/d/e/T/viewform?entry.1=${encodeURIComponent(f)}`)].join('\n'));
+    await page.click('[data-action="apply-forms"]');
+    await page.waitForTimeout(300);
+    const st = await state();
+    const filled = st.platforms.lineOA.entries.filter((e) => e.type === 'form' && e.url.startsWith('https://docs.google.com/forms/')).length;
+    assert(filled === forms.length, `只填入 ${filled}/${forms.length}`);
+    await go('#/results/lineOA/edit');
+    await page.click('[data-action="entry-type"][data-i="0"][data-v="link"]');
+    assert((await state()).platforms.lineOA.entries[0].type === 'link', '切換入口功能失敗');
+  });
+
   console.log('產出與安裝');
   const zips = {};
   await test('五平台素材包 ZIP 可下載並通過完整性檢查', async () => {

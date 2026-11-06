@@ -8,6 +8,7 @@ import { richMenuBody, richMenuConfig, apiScript } from './line.js';
 import { websiteHTML } from './website.js';
 import { makeZip } from './zip.js';
 import { canvasToBlob } from './util.js';
+import { replyValue, formScript, formManual, formEntries, TYPE_NAME } from './entries.js';
 import { exportJSON } from './model.js';
 
 export const RICHMENU_MAX_BYTES = 1024 * 1024;
@@ -59,7 +60,26 @@ export function guideTxt(state, pid) {
   ].join('\n');
 }
 
+/** 自動回應清單：關鍵字（入口名稱）→ 回應內容 */
+export function replyList(state, D) {
+  const L = state.platforms.lineOA;
+  const out = [];
+  for (let p = 0; p < L.pages; p++)
+    L.entries.slice(p * 8, p * 8 + L.count).forEach((e) => {
+      if (e.label && (e.type === 'reply' || e.type === 'chat' || ((e.type === 'form' || e.type === 'link') && !e.url))) out.push({ keyword: e.label, reply: replyValue(D, e, state), type: e.type });
+    });
+  return out;
+}
+
 export function guideDynamic(state, g) {
+  if (g.dynamic === 'forms') {
+    const n = formEntries(state.platforms.lineOA).length;
+    return n ? `有 ${n} 個入口使用需求表單。用素材包裡的 google-form-script.gs 在你自己的 Google 帳號建立表單（或照「表單題目.txt」手動建立），再把網址填回 APP。` : '目前沒有使用表單的入口，可以跳過這一步。';
+  }
+  if (g.dynamic === 'replies') {
+    const D = derive(state);
+    return ['後台 → 自動回應訊息 → 新增。關鍵字填下方左邊的文字，回應內容貼上右邊的文字：', '', ...replyList(state, D).map((r) => `【關鍵字】${r.keyword}\n【回應】${r.reply}\n`)].join('\n');
+  }
   if (g.dynamic !== 'richmenu') return '';
   const L = state.platforms.lineOA;
   if (L.pages === 1 && L.count === 6)
@@ -88,6 +108,11 @@ export async function platformFiles(state, pid, designId = state.selectedDesignI
     files.push({ name: 'line-richmenu-config.json', data: JSON.stringify(richMenuConfig(L, D.titleName), null, 2) });
     files.push({ name: 'upload-richmenu.sh', data: apiScript(L, useJpg ? 'jpg' : 'png') });
     files.push({ name: '歡迎訊息.txt', data: textValue(state, D, 'lineOA', 'greeting') });
+    files.push({ name: '自動回應清單.txt', data: replyList(state, D).map((r) => `【關鍵字】${r.keyword}（${TYPE_NAME[r.type]}）\n${r.reply}\n`).join('\n') });
+    if (formEntries(L).length) {
+      files.push({ name: 'google-form-script.gs', data: formScript(state, D) });
+      files.push({ name: '表單題目.txt', data: formManual(state, D) });
+    }
   }
   if (pid === 'website') files.push({ name: 'index.html', data: websiteHTML(state, D) }); // og.png 已在素材中
   const folder = `${safeName(D.titleName)}-${P.name}`;
