@@ -209,7 +209,7 @@ export function migrate(raw) {
   if (raw.schemaVersion > 2) throw new Error('這個檔案來自較新版本，請先更新 APP');
   if (raw.answers && Array.isArray(raw.entries)) return fromLegacyV1(raw);
   if (raw.schemaVersion === 1 && raw.identity) return fromKitV1(raw);
-  throw new Error('不是品牌實驗室的進度檔');
+  throw new Error('不是品牌工作室的進度檔');
 }
 
 // ---------- 儲存 ----------

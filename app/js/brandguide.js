@@ -56,7 +56,7 @@ export function brandMd(state, D) {
   const today = new Date().toISOString().slice(0, 10);
   return `# ${D.titleName} 品牌規範（brand.md）
 
-> 由「品牌實驗室」整理，${today}。標示「${TODO}」的項目尚未決定。
+> 由「品牌工作室」整理，${today}。標示「${TODO}」的項目尚未決定。
 
 ## 1. 品牌核心
 - 我是誰：${v(D.whoami)}

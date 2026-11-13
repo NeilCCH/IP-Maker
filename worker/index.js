@@ -1,4 +1,4 @@
-// 品牌實驗室 後台：Google 登入、使用申請、管理者審核、APP 門禁
+// 品牌工作室 後台：Google 登入、使用申請、管理者審核、APP 門禁
 // 部署：Cloudflare Workers（wrangler.jsonc）。申請資料存在 Durable Object（SQLite），不需另外建立資料庫。
 // 在 GOOGLE_CLIENT_ID 尚未設定前，門禁不啟用（維持公開使用），避免網站被整個鎖住。
 import { DurableObject } from 'cloudflare:workers';

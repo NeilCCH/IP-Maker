@@ -22,7 +22,7 @@ const head = (title, lead) => `<div class="page-head"><p class="eyebrow">個人�
 let clientId = '';
 
 function renderLogin() {
-  root.innerHTML = `${head('登入品牌實驗室', '這是團隊內部工具。第一次使用請先用 Google 帳號登入，填寫申請資料，經管理者審核通過後即可使用。')}
+  root.innerHTML = `${head('登入品牌工作室', '這是團隊內部工具。第一次使用請先用 Google 帳號登入，填寫申請資料，經管理者審核通過後即可使用。')}
   <section class="card gate-card">
     <ol class="gate-steps"><li><b>用 Google 帳號登入</b><span>Gmail 帳號即可</span></li><li><b>填寫申請資料</b><span>單位、事業部、職稱、姓名</span></li><li><b>等待審核</b><span>管理者同意後就能使用</span></li></ol>
     <div id="gbtn" class="gbtn"></div>

@@ -85,12 +85,12 @@ export function formScript(state, D) {
   const choices = formChoices(state);
   const entries = formEntries(line).map((e) => e.label);
   return `/**
- * 品牌實驗室：建立「${brand}｜需求表」
+ * 品牌工作室：建立「${brand}｜需求表」
  * 會在「你自己的」Google 帳號建立一份 Google 表單和一份回覆試算表，不會傳資料給任何第三方。
  * 用法：到 script.google.com →「新專案」→ 刪掉原本內容、貼上全部 → 按上方「執行」。
  * 第一次執行會要求授權：這是你自己的程式，Google 會提醒「尚未驗證」，
  * 請點「進階」→「前往（專案名稱）」→「允許」。
- * 執行完，到下方「執行記錄」複製 BRAND-STUDIO-RESULT 開始的全部文字，貼回品牌實驗室。
+ * 執行完，到下方「執行記錄」複製 BRAND-STUDIO-RESULT 開始的全部文字，貼回品牌工作室。
  */
 function createBrandForm() {
   var CHOICES = ${JSON.stringify(choices)};

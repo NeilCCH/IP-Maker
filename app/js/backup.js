@@ -29,7 +29,7 @@ export async function cloudBackup(state) {
     const file = new File([data], name, { type });
     if (navigator.canShare?.({ files: [file] })) {
       try {
-        await navigator.share({ files: [file], title: '品牌實驗室進度備份', text: '品牌實驗室進度備份檔，需要時可在 APP「進階工具 → 匯入進度」還原。' });
+        await navigator.share({ files: [file], title: '品牌工作室進度備份', text: '品牌工作室進度備份檔，需要時可在 APP「進階工具 → 匯入進度」還原。' });
         return 'shared';
       } catch (e) {
         if (e?.name === 'AbortError') return 'cancelled';

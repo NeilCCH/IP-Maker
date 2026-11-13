@@ -74,7 +74,7 @@ export function apiScript(line, imageExt = 'png') {
   const mime = imageExt === 'jpg' ? 'image/jpeg' : 'image/png';
   const pages = Array.from({ length: line.pages }, (_, p) => p + 1);
   return `#!/usr/bin/env bash
-# 品牌實驗室：LINE 圖文選單上傳指令（進階，主持人／支援夥伴使用）
+# 品牌工作室：LINE 圖文選單上傳指令（進階，主持人／支援夥伴使用）
 # 狀態：依 Messaging API 文件撰寫，尚未在真實官方帳號驗證，請先用測試帳號執行。
 # 用法：
 #   1. 在 LINE Developers 取得此官方帳號的 Channel access token
