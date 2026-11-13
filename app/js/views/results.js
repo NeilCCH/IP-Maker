@@ -1,5 +1,5 @@
 // 第三步：連接並完成——五平台固定入口，每個都有 預覽→修改→下載→提示詞→設定引導
-import { PLATFORMS, PLATFORM_BY_ID, assetsFor, statusOf, isReady } from '../platforms.js';
+import { PLATFORMS, PLATFORM_BY_ID, assetsFor, statusOf, isReady, AI_TARGET } from '../platforms.js';
 import { TEXT_FIELDS, textValue, lengthNote } from '../copy.js';
 import { derive } from '../brand.js';
 import { buildPrompt } from '../prompt.js';
@@ -8,7 +8,7 @@ import { entriesOutOfSync, entriesFromServices } from '../model.js';
 import { websiteHTML } from '../website.js';
 import { prepare, assetBlob, platformZip, textsTxt, guideDynamic, replyList } from '../export.js';
 import { qIndexOf } from '../data/questions.js';
-import { brandMd, guidePrompt, missingItems } from '../brandguide.js';
+import { brandMd, guidePrompt, missingItems, AI_PROMPTS, AI_PROMPT_BY_ID, aiPromptText } from '../brandguide.js';
 import { ENTRY_TYPES, TYPE_NAME, replyValue, generateReply, formScript, formManual, formEntries, parseFormResult, LINE_REPLY_MAX } from '../entries.js';
 import { store, commit, save } from '../store.js';
 import { esc, toast, download, copyText, hash, safeURL, charLen, today } from '../util.js';
@@ -217,7 +217,33 @@ function guideCard(D) {
 }
 
 // ---------- 主畫面 ----------
+const platformNav = (pid, tab) => `<nav class="ptabs" aria-label="成果">${PLATFORMS.map((x) => (isReady(x.id) ? `<a href="#/results/${x.id}/${tab}" aria-current="${x.id === pid ? 'page' : 'false'}">${icon(x.icon, 'ic sm')}${esc(x.name)}</a>` : `<span class="is-building" aria-disabled="true" title="建置中">${icon(x.icon, 'ic sm')}${esc(x.name)}<small>建置中</small></span>`)).join('')}<a href="#/results/ai" aria-current="${pid === 'ai' ? 'page' : 'false'}">${icon(AI_TARGET.icon, 'ic sm')}${esc(AI_TARGET.name)}</a></nav>`;
+
+/** AI 工具提示詞：依用途選一種，複製後貼到其他 AI 工具 */
+function renderAI(root, kindArg) {
+  const s = S();
+  const D = derive(s);
+  const P = AI_PROMPT_BY_ID[kindArg] || AI_PROMPTS[0];
+  const miss = missingItems(s, D);
+  root.innerHTML = `
+  <div class="page-head"><p class="eyebrow">第三步</p><h1 tabindex="-1">AI 工具提示詞</h1>
+  <p class="lead">你的品牌元素已經整理成提示詞。選一個用途，複製後貼到對應的 AI 工具，產出的內容就會符合你的品牌。</p></div>
+  ${platformNav('ai', 'preview')}
+  <section class="panel" aria-labelledby="pTitle">
+    <header class="panel-head"><h2 id="pTitle">${esc(P.name)}</h2><p>${esc(P.desc)}</p><p class="hint">適用工具：${esc(P.tools)}</p></header>
+    <nav class="subtabs" aria-label="提示詞用途">${AI_PROMPTS.map((x) => `<a href="#/results/ai/${x.id}" aria-current="${x.id === P.id ? 'page' : 'false'}">${esc(x.name)}</a>`).join('')}</nav>
+    <div class="panel-body">
+      ${miss.length ? `<p class="parse"><span>品牌資料還有 ${miss.length} 項沒填（${miss.map(esc).join('、')}），提示詞裡會標示【待補】。<a href="#/profile">回第一步補上 →</a></span></p>` : ''}
+      ${P.topic ? `<label class="field"><span>${esc(P.topic)}（填了會自動放進提示詞）</span><input data-ai-topic="${P.id}" maxlength="500" value="${esc(s.meta.aiTopics[P.id] || '')}" placeholder="例如：${esc(P.example)}"></label>` : ''}
+      <label class="field"><span>提示詞（可直接修改後再複製）</span><textarea id="aiOut" rows="16">${esc(aiPromptText(s, D, P.id))}</textarea></label>
+      <div class="row"><button type="button" class="btn primary" data-action="ai-copy">${icon('doc', 'ic sm')} 複製提示詞</button><button type="button" class="btn ghost" data-action="ai-dl" data-id="${P.id}">下載 TXT</button>${P.id === 'guide' ? '<button type="button" class="btn ghost" data-action="guide-dl">下載 brand.md</button>' : ''}</div>
+      <p class="hint">怎麼用：按「複製提示詞」→ 打開 AI 工具 → 貼上送出。提示詞是由你的問卷答案自動組成；回第一步修改答案後，這裡會跟著更新。</p>
+    </div>
+  </section>`;
+}
+
 export function render(root, [pidArg, tabArg]) {
+  if (pidArg === 'ai' || (!pidArg && S().meta.target === 'ai')) return renderAI(root, tabArg);
   const fallback = isReady(S().meta.target) ? S().meta.target : PLATFORMS.find((p) => isReady(p.id)).id;
   const pid = PLATFORM_BY_ID[pidArg] && isReady(pidArg) ? pidArg : fallback;
   const tab = TABS.some(([t]) => t === tabArg) ? tabArg : 'preview';
@@ -229,7 +255,7 @@ export function render(root, [pidArg, tabArg]) {
   <p class="lead">照「預覽 → 修改 → 下載 → 提示詞 → 設定引導」的順序完成。標示「建置中」的平台，完成後會陸續開放。</p></div>
   ${guideCard(D)}
   ${overview(pid)}
-  <nav class="ptabs" aria-label="平台">${PLATFORMS.map((x) => (isReady(x.id) ? `<a href="#/results/${x.id}/${tab}" aria-current="${x.id === pid ? 'page' : 'false'}">${icon(x.icon, 'ic sm')}${esc(x.name)}</a>` : `<span class="is-building" aria-disabled="true" title="建置中">${icon(x.icon, 'ic sm')}${esc(x.name)}<small>建置中</small></span>`)).join('')}</nav>
+  ${platformNav(pid, tab)}
   <section class="panel" aria-labelledby="pTitle">
     <header class="panel-head"><h2 id="pTitle">${esc(P.name)}</h2><p>${esc(P.summary)}・風格：${esc(D.design.name)}</p></header>
     <nav class="subtabs" aria-label="${esc(P.name)} 操作">${TABS.map(([t, label], i) => `<a href="#/results/${pid}/${t}" aria-current="${t === tab ? 'page' : 'false'}"><span class="n">${i + 1}</span>${label}</a>`).join('')}</nav>
@@ -260,6 +286,8 @@ export async function onAction(act, el) {
     case 'reset-text': delete s.platforms[el.dataset.p].overrides[el.dataset.k]; commit(); toast('已恢復自動產生'); return true;
     case 'web-width': setWebWidth(+el.dataset.v); return true;
     case 'guide-copy': copyText(guidePrompt(s, derive(s))); return true;
+    case 'ai-copy': { const t = document.getElementById('aiOut'); copyText(t.value, t); return true; }
+    case 'ai-dl': download(`ai-prompt-${el.dataset.id}.txt`, document.getElementById('aiOut').value, 'text/plain;charset=utf-8'); toast('已下載'); return true;
     case 'guide-dl': download('brand.md', brandMd(s, derive(s)), 'text/markdown;charset=utf-8'); toast('已下載 brand.md'); return true;
     case 'entry-type': {
       const e = L.entries[+el.dataset.i];
@@ -371,6 +399,13 @@ export function onInput(el) {
   if (el.dataset.pagename !== undefined) {
     s.platforms.lineOA.pageNames[+el.dataset.pagename] = el.value.slice(0, 12);
     save();
+    return true;
+  }
+  if (el.dataset.aiTopic) {
+    s.meta.aiTopics[el.dataset.aiTopic] = el.value.slice(0, 500);
+    save();
+    const out = document.getElementById('aiOut');
+    if (out) out.value = aiPromptText(s, derive(s), el.dataset.aiTopic);
     return true;
   }
   if (el.dataset.promptExtra) {

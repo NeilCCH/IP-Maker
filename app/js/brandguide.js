@@ -137,3 +137,131 @@ export function guidePrompt(state, D) {
 
 ${brandMd(state, D)}`;
 }
+
+// ---------- AI 工具提示詞：把品牌元素帶到其他 AI 工具 ----------
+function brief(state, D) {
+  const p = D.palette;
+  const ff = (id) => (state.freeform[id] || '').trim();
+  return [
+    `- 品牌／名稱：${v(D.brandName || D.personName)}（對外呈現：${v(D.displayName)}）`,
+    `- 我是誰：${v(D.whoami)}`,
+    `- 標語：${v(D.slogan)}`,
+    `- 定位與專長：${v(D.positioning)}；${list(D.expertise)}`,
+    `- 服務對象：${list(D.audience)}${D.audiencePain ? `（${D.audiencePain}）` : ''}`,
+    `- 三個品牌關鍵字：${list(D.keywords)}`,
+    `- 語氣：${D.tone}${D.toneOrder ? `，${D.toneOrder}` : ''}`,
+    `- 色彩：底色 ${p.bg}（約 60%）、主色 ${p.primary}（約 30%）、輔助色 ${p.accent}（約 10%）、文字色 ${p.ink}`,
+    `- 字型感覺：${D.font}`,
+    `- 視覺風格：${D.design.name}（${D.design.tag}）`,
+    `- 圖像風格：${list(D.imagery)}`,
+    `- 不要：${list([...avoidSummary(D), ff('avoid')].filter(Boolean))}`,
+    `- 識別方式：${list(D.signature)}`,
+  ].join('\n');
+}
+
+const RULES = `規則：
+- 使用台灣繁體中文。
+- 不得虛構我的經歷、證照、得獎、客戶案例或數據；需要時先問我。
+- 不使用保證報酬、恐嚇式或制式保險廣告用語。`;
+
+const topicLine = (t, fallback) => (t && t.trim() ? t.trim() : `【請在這裡寫下這次要做的內容，例如：${fallback}】`);
+
+export const AI_PROMPTS = [
+  {
+    id: 'guide', name: '品牌規範', tools: 'Claude、ChatGPT、Gemini 等聊天型 AI',
+    desc: '最完整的一份。貼上後，AI 會記住你的品牌，之後請它做任何東西都照這份規範。還沒填的項目，AI 會一題一題問你。',
+    build: (state, D) => guidePrompt(state, D),
+  },
+  {
+    id: 'persona', name: '長期設定', tools: 'ChatGPT「自訂指令」、Claude「專案指示」、Gemini「Gem」',
+    desc: '精簡版。貼到 AI 工具的長期設定裡，以後每次對話都自動套用，不用重貼。',
+    build: (state, D) => `你是我的個人品牌助理。以下是我的品牌設定，每次回答與製作內容都要遵守。
+
+${brief(state, D)}
+
+${RULES}
+- 我沒有特別說明時，文字用上面的語氣；需要視覺時，用上面的色彩、字型感覺與圖像風格。
+- 內容與品牌設定衝突時，先提醒我再繼續。`,
+  },
+  {
+    id: 'image', name: 'AI 生圖', tools: 'ChatGPT 生圖、Gemini 生圖、Midjourney、Canva AI', topic: '想畫什麼', example: '退休規劃講座的 IG 貼文主視覺，方形',
+    desc: '把配色、風格和禁忌帶進生圖工具，產出符合品牌的圖片。',
+    build: (state, D, t) => `請幫我生成一張圖片。
+
+這次要畫的內容：${topicLine(t, '退休規劃講座的 IG 貼文主視覺，方形')}
+
+品牌視覺規範：
+- 視覺風格：${D.design.name}（${D.design.rules.join('；')}）
+- 色彩：底色 ${D.palette.bg} 約 60%、主色 ${D.palette.primary} 約 30%、輔助色 ${D.palette.accent} 約 10%
+- 圖像調性：${list(D.imagery)}
+- 字型感覺：${D.font}
+- 給人的感覺：${list(D.keywords)}${D.feeling ? `；${D.feeling}` : ''}
+
+不要出現：
+- ${[...avoidSummary(D), (state.freeform.avoid || '').trim()].filter(Boolean).join('\n- ') || '（沒有特別限制）'}
+- 真人肖像或虛構的人物臉孔（${D.photoMode === 'none' ? '這個品牌不使用人物照片' : '本人照片我會另外提供，請預留位置'}）
+- 圖片上的文字請盡量少；需要文字時用繁體中文，${D.brandName ? `品牌名稱是「${D.brandName}」` : '不要自行加上品牌名稱'}${D.slogan ? `，標語是「${D.slogan}」` : ''}，其他文字不要自己編。
+
+請先用一兩句話說明你的構圖想法，再生成圖片。`,
+  },
+  {
+    id: 'writing', name: '寫貼文文案', tools: 'Claude、ChatGPT、Gemini', topic: '想寫什麼', example: '一則 Threads 貼文，主題是退休前要先算清楚的三個數字',
+    desc: '用你的語氣和關鍵字寫社群貼文、LINE 訊息或文章。',
+    build: (state, D, t) => `請用我的品牌語氣幫我寫文案。
+
+這次要寫的內容：${topicLine(t, '一則 Threads 貼文，主題是退休前要先算清楚的三個數字')}
+
+我的品牌：
+${brief(state, D)}
+
+寫作要求：
+- 語氣「${D.tone}」${D.toneOrder ? `，${D.toneOrder}` : ''}。開場範例：${greeting(D).replace(/\n/g, ' ')}
+- 給我 3 個版本，各附一句說明差異。
+- 需要我的真實經驗或數據的地方，用【待補】標出來，不要自己編。
+${RULES}`,
+  },
+  {
+    id: 'slides', name: '簡報與海報', tools: 'Gamma、Canva、Claude、ChatGPT', topic: '簡報或海報主題', example: '給準退休族的 20 分鐘講座簡報，約 10 頁',
+    desc: '做簡報、講座海報或 DM 時，讓版面、配色和字型都符合品牌。',
+    build: (state, D, t) => `請幫我規劃並製作簡報（或海報）。
+
+主題：${topicLine(t, '給準退休族的 20 分鐘講座簡報，約 10 頁')}
+
+版面規範：
+- 視覺風格：${D.design.name}（${D.design.rules.join('；')}）
+- 色彩：底色 ${D.palette.bg}、主色 ${D.palette.primary}、輔助色 ${D.palette.accent}、文字 ${D.palette.ink}；比例約 60／30／10
+- 字型：${(FONT_RULES[D.font] || FONT_RULES['現代黑體・俐落']).slice(0, 3).map((r, i) => ['標題', '內文', '數字'][i] + '用' + r).join('；')}
+- 每頁只放一個重點，留白要夠${D.signature.length ? `；固定出現：${D.signature.join('、')}` : ''}
+
+我的品牌：
+${brief(state, D)}
+
+請先給我大綱（每頁標題與一句重點），我確認後再做完整內容。
+${RULES}`,
+  },
+  {
+    id: 'video', name: '短影音腳本', tools: 'Claude、ChatGPT、Gemini；剪輯時搭配剪映、CapCut', topic: '影片主題', example: '60 秒短影音，主題是保單整理的第一步',
+    desc: '寫 Reels、Shorts 的腳本和字卡，口吻和畫面風格與品牌一致。',
+    build: (state, D, t) => `請幫我寫短影音腳本。
+
+主題：${topicLine(t, '60 秒短影音，主題是保單整理的第一步')}
+
+我的品牌：
+${brief(state, D)}
+
+腳本要求：
+- 用表格列出：秒數、畫面、口白、字卡文字。
+- 前 3 秒要有吸引人的開場，但不用恐嚇或誇大。
+- 口白用「${D.tone}」的語氣，像本人在說話。
+- 字卡配色用主色 ${D.palette.primary} 與輔助色 ${D.palette.accent}，字型感覺「${D.font}」。
+- 結尾放${D.slogan ? `標語「${D.slogan}」` : '一句行動呼籲'}。
+- 另外給我 3 個標題和 5 個標籤。
+${RULES}`,
+  },
+];
+
+export const AI_PROMPT_BY_ID = Object.fromEntries(AI_PROMPTS.map((p) => [p.id, p]));
+export const aiPromptText = (state, D, id) => {
+  const P = AI_PROMPT_BY_ID[id] || AI_PROMPTS[0];
+  return P.build(state, D, state.meta.aiTopics?.[P.id] || '');
+};

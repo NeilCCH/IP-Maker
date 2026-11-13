@@ -142,6 +142,11 @@ export const PLATFORM_BY_ID = Object.fromEntries(PLATFORMS.map((p) => [p.id, p])
 export const READY_PLATFORMS = ['lineOA'];
 export const isReady = (id) => READY_PLATFORMS.includes(id);
 
+/** 不屬於社群平台的成果：AI 工具提示詞 */
+export const AI_TARGET = { id: 'ai', name: 'AI 工具提示詞', icon: 'star', summary: '把品牌元素變成提示詞，貼到 Claude、ChatGPT、Gemini、生圖與簡報工具使用' };
+export const isTarget = (id) => id === AI_TARGET.id || isReady(id);
+export const targetName = (id) => (id === AI_TARGET.id ? AI_TARGET.name : PLATFORM_BY_ID[id]?.name || '');
+
 /** LINE 圖文選單相關素材依頁數動態產生 */
 export function lineAssets(line) {
   const out = [];

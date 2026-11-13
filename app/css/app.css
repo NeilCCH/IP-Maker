@@ -306,7 +306,7 @@ label.btn { position: relative; }
 /* 首頁：選擇平台 */
 .pick-title { margin-top: var(--s6); font-size: 20px; }
 .platform-pick { display: grid; gap: var(--s3); margin: var(--s4) 0 var(--s3); text-align: left; }
-@media (min-width: 760px) { .platform-pick { grid-template-columns: repeat(5, 1fr); } }
+@media (min-width: 760px) { .platform-pick { grid-template-columns: repeat(3, 1fr); } }
 .pick {
   display: grid; grid-template-columns: 28px 1fr; grid-template-rows: auto auto auto; gap: 4px var(--s3); align-content: start;
   padding: var(--s4); border: 1.5px solid var(--c-line); border-radius: var(--radius-sm); background: #fff; font: inherit; color: var(--c-ink); text-align: left;

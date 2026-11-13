@@ -217,7 +217,7 @@ const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'brand-e2e-'));
   await test('首頁先選平台；建置中的平台不能點', async () => {
     await go('#/');
     const pickable = await page.$$eval('button.pick', (bs) => bs.map((b) => b.dataset.id));
-    assert(JSON.stringify(pickable) === JSON.stringify(READY), `可選平台不符：${pickable}`);
+    assert(JSON.stringify(pickable) === JSON.stringify([...READY, 'ai']), `可選項目不符：${pickable}`);
     assert((await page.$$('.pick.is-building')).length === BUILDING.length, '建置中平台數量不符');
     assert(!(await page.$('.pick.is-building a, a.pick.is-building')), '建置中平台有連結');
     await page.click(`button.pick[data-id="${READY[0]}"]`);
@@ -263,6 +263,38 @@ const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'brand-e2e-'));
     await go('#/results/lineOA/prompt');
     assert((await page.inputValue('#promptOut')) === '我改過的提示詞', '手動提示詞被覆蓋');
     assert(await page.isVisible('[data-action="prompt-regen"]'), '未詢問是否重新生成');
+  });
+
+  await test('AI 工具提示詞：首頁可選，六種用途都帶入品牌元素，可填主題、複製與下載', async () => {
+    await page.evaluate(async (u) => { const m = await import(u); localStorage.setItem('brand-studio-v2', JSON.stringify(m.sampleHengYuan())); }, mod('model.js'));
+    await go('#/');
+    await page.click('button.pick[data-id="ai"]');
+    assert((await state()).meta.target === 'ai', '未記錄選擇 AI 工具提示詞');
+    assert((await page.textContent('.home > .btn.big')).includes('AI 工具提示詞'), '開始按鈕沒有顯示選擇的項目');
+    await go('#/design');
+    assert((await page.getAttribute('.actions-row .btn.primary', 'href')) === '#/results/ai', '第二步的下一步沒有導向 AI 提示詞');
+    await go('#/results');
+    assert((await page.textContent('h1')).includes('AI 工具提示詞'), '第三步沒有顯示 AI 提示詞頁');
+    const kinds = await page.$$eval('.subtabs a', (as) => as.map((a) => a.getAttribute('href').split('/').pop()));
+    assert(kinds.length === 6, `用途數量 ${kinds.length}`);
+    for (const k of kinds) {
+      await go(`#/results/ai/${k}`);
+      const t = await page.inputValue('#aiOut');
+      assert(t.includes('#155eef'), `${k} 沒有帶入主色`);
+      assert(/專業|有遠見|值得信任/.test(t), `${k} 沒有帶入關鍵字`);
+      assert(t.includes('繁體中文'), `${k} 沒有語言規則`);
+      assert(!t.includes('undefined') && !t.includes('[object'), `${k} 內容有錯誤字樣`);
+    }
+    await go('#/results/ai/image');
+    await page.fill('[data-ai-topic="image"]', '退休講座海報');
+    assert((await page.inputValue('#aiOut')).includes('退休講座海報'), '主題沒有放進提示詞');
+    assert((await page.inputValue('#aiOut')).includes('虛構的人物臉孔'), '生圖提示詞沒有禁止虛構人像');
+    await page.reload(); await page.waitForTimeout(300);
+    assert((await page.inputValue('[data-ai-topic="image"]')) === '退休講座海報', '主題重新整理後不見');
+    const [dl] = await Promise.all([page.waitForEvent('download'), page.click('[data-action="ai-dl"]')]);
+    assert(dl.suggestedFilename() === 'ai-prompt-image.txt', dl.suggestedFilename());
+    await go('#/results/lineOA/preview');
+    assert(await page.isVisible('.ptabs a[href="#/results/ai"]'), 'LINE 頁沒有 AI 提示詞分頁');
   });
 
   console.log('LINE 官方帳號');

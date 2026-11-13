@@ -26,7 +26,7 @@ export function fresh() {
   const s = {
     schemaVersion: SCHEMA_VERSION,
     app: 'brand-studio',
-    meta: { createdAt: now, updatedAt: now, qIndex: 0, started: false, target: 'lineOA', lastBackupAt: '' },
+    meta: { createdAt: now, updatedAt: now, qIndex: 0, started: false, target: 'lineOA', lastBackupAt: '', aiTopics: {} },
     answers: Object.fromEntries([...QUESTIONS.map((q) => q.id), ...EXTRA_ANSWER_IDS].map((id) => [id, []])),
     freeform: Object.fromEntries(QUESTIONS.map((q) => [q.id, ''])),
     resolutions: {},
@@ -102,7 +102,10 @@ export function sanitize(x) {
   n.meta.createdAt = str(x.meta?.createdAt, 40) || n.meta.createdAt;
   n.meta.qIndex = Math.min(QUESTIONS.length - 1, Math.max(0, Number(x.meta?.qIndex) || 0));
   n.meta.started = x.meta?.started === true;
-  n.meta.target = PLATFORM_IDS.includes(x.meta?.target) ? x.meta.target : 'lineOA';
+  n.meta.target = PLATFORM_IDS.includes(x.meta?.target) || x.meta?.target === 'ai' ? x.meta.target : 'lineOA';
+  n.meta.aiTopics = {};
+  if (x.meta?.aiTopics && typeof x.meta.aiTopics === 'object')
+    for (const [k, v] of Object.entries(x.meta.aiTopics)) if (k.length < 20 && typeof v === 'string') n.meta.aiTopics[k] = v.slice(0, 500);
   n.meta.lastBackupAt = Number.isFinite(Date.parse(x.meta?.lastBackupAt)) ? str(x.meta.lastBackupAt, 40) : '';
   for (const q of QUESTIONS) {
     let a = strArr(x.answers?.[q.id], q.max || 16, 40);
