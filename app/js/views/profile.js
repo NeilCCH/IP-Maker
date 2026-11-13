@@ -1,5 +1,5 @@
 // 第一步：說說你自己——一次一題、清楚標示單／多選、常駐自由回答、自動保存
-import { QUESTIONS, selectionLabel, Q_BY_ID, WORD_GROUPS, johari } from '../data/questions.js';
+import { QUESTIONS, selectionLabel, Q_BY_ID, WORD_GROUPS } from '../data/questions.js';
 import { PALETTES, AUTO_PALETTE, HUE_NAMES } from '../data/palettes.js';
 import { detectConflicts, parseReport, nameProposals, sloganProposals, derive, positioningOf, customPalette } from '../brand.js';
 import { syncEntries } from '../model.js';
@@ -32,35 +32,17 @@ function optionButtons(q) {
 
 function wordsBlock(q) {
   const a = answers(q.id);
-  const partner = q.id === 'partnerWords';
-  return `${partner ? `<div class="hand-over">${icon('person')}<p><b>請把手機交給夥伴</b><br>夥伴選完再交回給你。下一題會比對兩人選的詞，整理出「四個我」。</p></div>` : ''}
-  <p class="count-line" aria-live="polite">已選 <b>${a.length}</b> / ${q.max}</p>
-  ${WORD_GROUPS.map((g) => `<fieldset class="word-group"><legend>${g.name}</legend><div class="words">${g.words.map((w) => `<button type="button" class="word ${partner ? 'red' : ''}" data-action="word" data-v="${esc(w)}" aria-pressed="${a.includes(w)}">${esc(w)}</button>`).join('')}</div></fieldset>`).join('')}
-  ${partner && !a.length ? '<p class="hint">暫時沒有夥伴？按「下一題」先跳過，之後隨時可以從右邊的題目清單回來補。</p>' : ''}`;
+  return `<p class="count-line" aria-live="polite">已選 <b>${a.length}</b> / ${q.max}</p>
+  ${WORD_GROUPS.map((g) => `<fieldset class="word-group"><legend>${g.name}</legend><div class="words">${g.words.map((w) => `<button type="button" class="word" data-action="word" data-v="${esc(w)}" aria-pressed="${a.includes(w)}">${esc(w)}</button>`).join('')}</div></fieldset>`).join('')}`;
 }
 
-const JOHARI_BOX = [
-  ['open', '開放我', '你和夥伴都圈到', '你的品牌核心，最有說服力'],
-  ['blind', '盲目我', '只有夥伴圈到', '別人看見、你還沒發現的優勢'],
-  ['hidden', '隱藏我', '只有你自己圈到', '你有，但要讓更多人感受到'],
-  ['unknown', '未知我', '兩個人都沒圈', '先放著，以後慢慢探索'],
-];
-
-function keywordsBlock(q) {
+function keywordsBlock() {
   const s = S();
-  const J = johari(s.answers.selfWords, s.answers.partnerWords);
+  const mine = s.answers.selfWords;
   const kw = answers('keywords');
-  const chip = (w) => `<button type="button" class="word" data-action="kw" data-v="${esc(w)}" aria-pressed="${kw.includes(w)}">${esc(w)}</button>`;
-  const noSelf = !s.answers.selfWords.length;
-  const noPartner = !s.answers.partnerWords.length;
-  const custom = kw.filter((w) => ![...J.open, ...J.blind, ...J.hidden].includes(w));
-  return `${noSelf ? '<p class="conflict">還沒有圈詞。建議先回到前兩題圈選，或直接在下方輸入你的關鍵字。</p>' : ''}
-  ${!noSelf && noPartner ? '<p class="hint warn-text">還沒有請夥伴圈，所以目前只有「隱藏我」。有夥伴圈之後，結果會更準。</p>' : ''}
-  <div class="johari">${JOHARI_BOX.map(([k, name, who, meaning]) => `<section class="jbox j-${k}"><h3>${name}</h3><p class="who">${who}</p><p class="meaning">${meaning}</p>
-    ${k === 'unknown' ? `<p class="hint">${J.unknown.length} 個詞</p>` : `<div class="words">${J[k].length ? J[k].map(chip).join('') : '<span class="hint">（沒有）</span>'}</div>`}</section>`).join('')}</div>
-  <h3 class="kw-title">我的 3 個品牌關鍵字 <span class="hint">（點上面的詞加入，已選 ${kw.length} / 3）</span></h3>
+  return `${mine.length ? `<div class="words kw-pick">${mine.map((w) => `<button type="button" class="word" data-action="kw" data-v="${esc(w)}" aria-pressed="${kw.includes(w)}">${esc(w)}</button>`).join('')}</div>` : '<p class="conflict">還沒有圈詞。建議先回上一題圈 6 個詞，或直接在下方輸入你的關鍵字。</p>'}
+  <h3 class="kw-title">我的 3 個品牌關鍵字 <span class="hint">（已選 ${kw.length} / 3）</span></h3>
   <ol class="kw-slots">${[0, 1, 2].map((i) => `<li>${kw[i] ? `<b>${esc(kw[i])}</b><button type="button" class="icon-btn" data-action="kw" data-v="${esc(kw[i])}" aria-label="移除 ${esc(kw[i])}">×</button>` : '<span class="hint">尚未選擇</span>'}</li>`).join('')}</ol>
-  ${custom.length ? '' : ''}
   <div class="inline-add"><label class="field grow"><span>也可以自己寫一個關鍵字（最多 8 個字）</span><input id="kwCustom" maxlength="8" placeholder="例如：說到做到"></label><button type="button" class="btn" data-action="kw-add">加入</button></div>`;
 }
 
@@ -209,7 +191,7 @@ export function render(root) {
       <div id="parseBox">${parseBlock(q.id)}</div>
       <div class="q-nav">
         <button type="button" class="btn ghost" data-action="q-prev" ${i === 0 ? 'disabled' : ''}>← 上一題</button>
-        <button type="button" class="btn primary" data-action="q-next">${i === QUESTIONS.length - 1 ? '完成，選喜歡的樣子 →' : q.optional && !answers(q.id).length ? '先跳過 →' : '下一題 →'}</button>
+        <button type="button" class="btn primary" data-action="q-next">${i === QUESTIONS.length - 1 ? '完成，選喜歡的樣子 →' : '下一題 →'}</button>
       </div>
     </section>
     <aside class="q-side">
@@ -259,7 +241,6 @@ export function onAction(act, el) {
       if (a.includes(v)) s.answers[q.id] = a.filter((x) => x !== v);
       else if (a.length >= q.max) return toast(`最多圈 ${q.max} 個，可以先取消一個`);
       else s.answers[q.id] = [...a, v];
-      // 夥伴圈的詞改變後，移除已不在四個我裡的關鍵字不需要：關鍵字可自由保留
       commit();
       break;
     }

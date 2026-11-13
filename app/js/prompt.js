@@ -46,7 +46,7 @@ export function buildPrompt(state, D, pid, extra = '') {
     `- 標語：${D.slogan || '（未定）'}`,
     `- 我是誰：${D.whoami || '（未填）'}`,
     `- 三個品牌關鍵字：${list(D.keywords)}`,
-    `- 四個我：開放我 ${list(D.johari.open)}；盲目我 ${list(D.johari.blind)}；隱藏我 ${list(D.johari.hidden)}`,
+    `- 自己圈選、最像我的詞：${list(D.selfWords)}`,
     `- 客群的處境與煩惱：${D.audiencePain || '（未填）'}`,
     `- 主要客群：${list(D.audience)}`,
     `- 服務專長：${list(D.expertise)}`,

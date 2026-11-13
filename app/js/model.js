@@ -246,7 +246,6 @@ export function sampleHengYuan() {
   const n = fresh();
   Object.assign(n.answers, {
     selfWords: ['專業', '有遠見', '有條理', '有效率', '值得信任', '果斷'],
-    partnerWords: ['專業', '有遠見', '讓人安心', '講解清楚', '值得信任', '沉穩'],
     keywords: ['專業', '有遠見', '值得信任'],
     toneOrder: ['先講重點'],
     font: ['現代黑體・俐落'],

@@ -60,29 +60,25 @@ const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'brand-e2e-'));
   const QI = await page.evaluate(async (u) => Object.fromEntries((await import(u)).QUESTIONS.map((q, i) => [q.id, i])), mod('data/questions.js'));
   const jumpTo = async (id) => { const st = await state(); st.meta.qIndex = QI[id]; await setState(st); await go('#/profile'); };
 
-  await test('四個我：自己圈 6 個、夥伴圈 6 個（可跳過），自動整理並選 3 個關鍵字', async () => {
+  await test('認識自己：自己圈 6 個詞，再選 3 個關鍵字；全程不需要別人', async () => {
     await go('#/profile');
     assert((await page.$$('[data-action="word"]')).length === 48, '詞庫不是 48 個詞');
     for (const w of ['沉穩', '果斷', '務實', '值得信任', '真誠', '有質感', '有遠見']) await page.click(`[data-action="word"][data-v="${w}"]`);
     let s = await state();
-    assert(s.answers.selfWords.length === 6 && !s.answers.selfWords.includes('有遠見'), `自己圈的詞上限錯誤：${s.answers.selfWords}`);
+    assert(s.answers.selfWords.length === 6 && !s.answers.selfWords.includes('有遠見'), `圈詞上限錯誤：${s.answers.selfWords}`);
     await page.fill('[data-ff="selfWords"]', '其實我也很會照顧人');
     await page.click('[data-action="q-next"]');
-    assert((await page.textContent('[data-action="q-next"]')).includes('跳過'), '夥伴題沒有可跳過的提示');
-    for (const w of ['沉穩', '有創意', '務實', '讓人安心', '有遠見', '有說服力']) await page.click(`[data-action="word"][data-v="${w}"]`);
-    await page.click('[data-action="q-next"]');
-    const open = await page.$$eval('.j-open [data-action="kw"]', (bs) => bs.map((b) => b.dataset.v));
-    const blind = await page.$$eval('.j-blind [data-action="kw"]', (bs) => bs.map((b) => b.dataset.v));
-    const hidden = await page.$$eval('.j-hidden [data-action="kw"]', (bs) => bs.map((b) => b.dataset.v));
-    assert(JSON.stringify(open) === JSON.stringify(['沉穩', '務實']), `開放我錯誤：${open}`);
-    assert(['有創意', '讓人安心', '有遠見', '有說服力'].every((w) => blind.includes(w)), `盲目我錯誤：${blind}`);
-    assert(['果斷', '值得信任', '真誠', '有質感'].every((w) => hidden.includes(w)), `隱藏我錯誤：${hidden}`);
-    for (const w of ['沉穩', '務實', '有遠見', '讓人安心']) await page.click(`.johari [data-action="kw"][data-v="${w}"]`);
+    assert((await page.textContent('#qTitle')).includes('3 個品牌關鍵字'), '圈詞後下一題不是選關鍵字');
+    const pick = await page.$$eval('.kw-pick [data-action="kw"]', (bs) => bs.map((b) => b.dataset.v));
+    assert(pick.length === 6 && pick.includes('沉穩') && pick.includes('有質感'), `可選的詞不是自己圈的 6 個：${pick}`);
+    for (const w of ['沉穩', '務實', '值得信任', '真誠']) await page.click(`.kw-pick [data-action="kw"][data-v="${w}"]`);
     s = await state();
-    assert(JSON.stringify(s.answers.keywords) === JSON.stringify(['沉穩', '務實', '有遠見']), `關鍵字錯誤：${s.answers.keywords}`);
+    assert(JSON.stringify(s.answers.keywords) === JSON.stringify(['沉穩', '務實', '值得信任']), `關鍵字錯誤：${s.answers.keywords}`);
     await page.fill('[data-ff="keywords"]', '深海藍、青色；沉穩、清楚');
     const pal = await page.evaluate(async (u) => (await import(u)).derive(JSON.parse(localStorage.getItem('brand-studio-v2'))).palette.hues, mod('brand.js'));
     assert(pal.includes('blue') || pal.includes('cyan'), `顏色感覺沒有影響建議配色：${pal}`);
+    const all = await page.evaluate(async (u) => JSON.stringify((await import(u)).QUESTIONS), mod('data/questions.js'));
+    assert(!/夥伴|同事|請他|交給/.test(all), '題目仍要求找別人');
   });
 
   await test('可只選選項、選項加文字、純文字回答；多選上限有效', async () => {
@@ -185,7 +181,7 @@ const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'brand-e2e-'));
     await go('#/results/lineOA/preview');
     assert(await page.isVisible('[data-action="guide-copy"]'), '沒有品牌規範區塊');
     const md = await page.evaluate(async ([g, b]) => { const G = await import(g); const B = await import(b); const st = JSON.parse(localStorage.getItem('brand-studio-v2')); return { md: G.brandMd(st, B.derive(st)), prompt: G.guidePrompt(st, B.derive(st)), miss: G.missingItems(st, B.derive(st)) }; }, [mod('brandguide.js'), mod('brand.js')]);
-    for (const k of ['品牌核心', '我是誰', '服務對象', '三個品牌關鍵字', '開放我', '語氣規則', '三個「不要」', '#155eef', '約 60%', '字型層級', '標題', '內文', '數字', '圖像風格', '識別方式', '衡量當下，規劃長遠'])
+    for (const k of ['品牌核心', '我是誰', '服務對象', '三個品牌關鍵字', '最像我的 6 個詞', '語氣規則', '三個「不要」', '#155eef', '約 60%', '字型層級', '標題', '內文', '數字', '圖像風格', '識別方式', '衡量當下，規劃長遠'])
       assert(md.md.includes(k), `brand.md 缺少「${k}」`);
     assert(md.prompt.includes('一次只問一題') || md.prompt.includes('一次問我一題'), '提示詞沒有逐題訪問的指示');
     assert(md.prompt.includes('都要照這份規範'), '提示詞沒有之後照規範的指示');

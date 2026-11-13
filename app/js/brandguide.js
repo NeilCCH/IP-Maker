@@ -1,5 +1,5 @@
 // 品牌規範（brand.md）：把問卷與風格整理成一份給任何 AI 使用的品牌規範，並附上使用指示。
-// 內容架構：品牌核心與標語、服務對象、三個關鍵詞、四個我、語氣規則、三個不要、
+// 內容架構：品牌核心與標語、服務對象、三個關鍵詞、語氣規則、三個不要、
 //           完整色票（色碼與使用比例）、字型層級（標題／內文／數字）、圖像風格要與不要、識別方式。
 import { avoidSummary, isPH } from './brand.js';
 import { greeting } from './copy.js';
@@ -51,7 +51,6 @@ export function missingItems(state, D) {
 export function brandMd(state, D) {
   const p = D.palette;
   const font = FONT_RULES[D.font] || FONT_RULES['現代黑體・俐落'];
-  const J = D.johari;
   const avoidVisual = avoidSummary(D);
   const ff = (id) => (state.freeform[id] || '').trim();
   const today = new Date().toISOString().slice(0, 10);
@@ -77,10 +76,7 @@ export function brandMd(state, D) {
 ${D.keywords.length ? D.keywords.map((k, i) => `${i + 1}. ${k}`).join('\n') : TODO}
 - 這三個詞給人的顏色與感覺：${v(D.feeling)}
 
-### 四個我（自己與夥伴各圈 6 個詞的比對）
-- 開放我（兩人都圈到，品牌核心）：${list(J.open)}
-- 盲目我（只有夥伴圈到，可以多展現的優勢）：${list(J.blind)}
-- 隱藏我（只有自己圈到，要讓更多人感受到）：${list(J.hidden)}
+- 自己圈選、最像我的 6 個詞：${list(D.selfWords)}
 
 ## 4. 語氣規則
 - 語氣：${D.tone}

@@ -3,9 +3,8 @@
 import { PALETTES, HUE_WORDS, HUE_NAMES } from './data/palettes.js';
 import { DESIGN_BY_ID } from './data/designs.js';
 import { hash } from './util.js';
-import { johari } from './data/questions.js';
 
-/** 品牌關鍵字：優先用「四個我」選出的 3 個；舊資料沿用個人特質 */
+/** 品牌關鍵字：從自己圈的詞選出的 3 個；舊資料沿用個人特質 */
 export function keywordsOf(state) {
   const k = state.answers.keywords || [];
   return k.length ? k : (state.answers.traits || []);
@@ -226,8 +225,6 @@ export function derive(state, designId = state.selectedDesignId) {
     traits: keywordsOf(state),
     keywords: keywordsOf(state),
     selfWords: state.answers.selfWords || [],
-    partnerWords: state.answers.partnerWords || [],
-    johari: johari(state.answers.selfWords || [], state.answers.partnerWords || []),
     whoami: (id.whoami || '').trim(),
     audiencePain: (state.freeform.audience || '').trim(),
     feeling: (state.freeform.keywords || '').trim(),

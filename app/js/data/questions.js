@@ -1,6 +1,6 @@
 // 第一步「說說你自己」題庫。每題都有常駐的自由回答欄。
-// type: words 圈詞 / keywords 四個我與關鍵字 / single 單選 / multi 多選（max 為上限）/ palette 色卡 / order 排序 / photo / name / display / contact
-// 「四個我」與「品牌 CIS 九宮格」的架構參考個人品牌課程學習單整理而成。
+// type: words 圈詞 / keywords 品牌關鍵字 / single 單選 / multi 多選（max 為上限）/ palette 色卡 / order 排序 / photo / name / display / contact
+// 圈詞與「品牌 CIS 九宮格」的架構參考個人品牌課程學習單整理而成；所有題目都可以一個人完成。
 
 export const SERVICE_CATALOG = [
   { label: '認識我', description: '個人介紹與服務理念（經歷、資格請本人填寫）' },
@@ -27,21 +27,16 @@ export const WORD_GROUPS = [
 export const ALL_WORDS = WORD_GROUPS.flatMap((g) => g.words);
 
 export const QUESTIONS = [
-  // ---------- 認識自己：四個我 ----------
+  // ---------- 認識自己 ----------
   {
-    id: 'selfWords', type: 'words', max: 6, section: '認識自己', short: '自己圈的詞',
-    title: '先自己圈：哪些詞最像你？',
+    id: 'selfWords', type: 'words', max: 6, section: '認識自己', short: '像我的詞',
+    title: '哪些詞最像你？',
     hint: '憑直覺選 6 個。不用想太久，選你覺得「這就是我」的詞。',
   },
   {
-    id: 'partnerWords', type: 'words', max: 6, section: '認識自己', short: '夥伴圈的詞', optional: true,
-    title: '換夥伴圈：在別人眼中，你是什麼樣的人？',
-    hint: '把手機交給同事、主管或家人，請他幫你選 6 個。暫時找不到人可以先跳過，之後再回來補。',
-  },
-  {
     id: 'keywords', type: 'keywords', max: 3, section: '認識自己', short: '品牌關鍵字',
-    title: '整理四個我，選出 3 個品牌關鍵字',
-    hint: '系統已經幫你把兩人圈的詞分好類。「開放我」是兩人都圈到的，最有說服力，建議優先從這裡選。',
+    title: '從這 6 個詞裡，選出 3 個品牌關鍵字',
+    hint: '選你最希望客戶記住的 3 個。之後的語氣、配色和命名都會參考它們。',
   },
   // ---------- 我服務誰 ----------
   {
@@ -184,20 +179,9 @@ export function selectionLabel(q) {
   if (q.type === 'single' || q.type === 'photo' || q.type === 'display') return '單選';
   if (q.type === 'palette') return '單選・可自訂色碼';
   if (q.type === 'order') return '多選・依點選順序排列';
-  if (q.type === 'words') return `圈 ${q.max} 個${q.optional ? '・可先跳過' : ''}`;
+  if (q.type === 'words') return `圈 ${q.max} 個`;
   if (q.type === 'keywords') return `選 ${q.max} 個關鍵字`;
   if (q.type === 'multi') return q.max >= q.options.length - 1 ? '可複選' : `多選・最多 ${q.max} 項`;
   if (q.type === 'name') return '輸入或選擇提案';
   return '選填';
-}
-
-/** 四個我：自己圈的詞與夥伴圈的詞交叉比對 */
-export function johari(selfWords, partnerWords) {
-  const s = new Set(selfWords), p = new Set(partnerWords);
-  return {
-    open: ALL_WORDS.filter((w) => s.has(w) && p.has(w)),
-    blind: ALL_WORDS.filter((w) => p.has(w) && !s.has(w)),
-    hidden: ALL_WORDS.filter((w) => s.has(w) && !p.has(w)),
-    unknown: ALL_WORDS.filter((w) => !s.has(w) && !p.has(w)),
-  };
 }
