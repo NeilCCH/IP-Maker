@@ -92,7 +92,7 @@ function client(base) {
   const workers = [];
   try {
     console.log('門禁未啟用（尚未設定 Google）');
-    const open = await startWorker(8791, {});
+    const open = await startWorker(8791, { GOOGLE_CLIENT_ID: '' }); // 設定檔已填入用戶端 ID，這裡模擬留白的情況
     workers.push(open);
     await test('未設定 Google 時網站維持公開', async () => {
       const r = await fetch(open.base + '/', { headers: { accept: 'text/html' }, redirect: 'manual' });

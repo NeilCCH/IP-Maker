@@ -1,5 +1,5 @@
 // Cloudflare Workers 設定：app 資料夾是 PWA 本體；worker/index.js 負責登入、申請審核與門禁。
-// GOOGLE_CLIENT_ID 留白時門禁不啟用（網站維持公開）。填入 Google OAuth 用戶端 ID 後即啟用。
+// GOOGLE_CLIENT_ID 留白時門禁不啟用（網站維持公開）；目前已填入，門禁啟用中。這個 ID 是公開資訊，不是密鑰。
 // 注意：不要在這裡設定 ALLOW_TEST_LOGIN（只給本機測試用）。
 {
   "name": "ip-maker",
@@ -16,6 +16,6 @@
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Registry"] }],
   "vars": {
     "ADMIN_EMAILS": "neo0935@gmail.com",
-    "GOOGLE_CLIENT_ID": ""
+    "GOOGLE_CLIENT_ID": "236774889093-kj6lumi3to6jmjljol2u9824i828btir.apps.googleusercontent.com"
   }
 }
