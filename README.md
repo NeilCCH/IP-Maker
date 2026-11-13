@@ -73,6 +73,16 @@ node tests/e2e.test.js
 
 > 舊展示版的 ChatGPT Sites 設定（`.openai/hosting.json`）沒有搬進來，也沒有改動原站點。
 
+## AI 工具提示詞
+
+首頁可選「AI 工具提示詞」。第三步提供六種用途的提示詞（品牌規範、長期設定、AI 生圖、寫貼文文案、簡報與海報、短影音腳本），
+自動帶入品牌核心、關鍵字、語氣、色票、字型與禁忌，可複製或下載後貼到其他 AI 工具。程式在 `app/js/brandguide.js`。
+
+## 部署注意事項
+
+Cloudflare 靠 GitHub App「Cloudflare Workers and Pages」接收推送通知。若推送後沒有新的部署，
+先到 GitHub → Settings → Applications → Cloudflare Workers and Pages → Repository access，確認清單裡有 `NeilCCH/IP-Maker`。
+
 ## 帳號申請與審核（門禁）
 
 - 同仁用 Google 帳號登入 → 填寫單位、事業部、職稱、姓名 → 管理者在 APP 的「管理」頁審核 → 通過後才能使用。
