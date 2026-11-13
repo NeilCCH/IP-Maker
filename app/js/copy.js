@@ -99,7 +99,7 @@ export const TEXT_FIELDS = {
   website: [
     { key: 'heroTitle', label: '首頁大標', max: 30, gen: (D) => D.titleName },
     { key: 'heroText', label: '首頁副標', max: 80, gen: (D) => `${D.positioning}。陪${who(D)}把規劃想清楚。` },
-    { key: 'about', label: '關於我', max: 1200, gen: (D) => [`我是${D.personName || PH('姓名')}${D.jobTitle ? `，${D.jobTitle}` : ''}。`, `主要服務${who(D)}，專注${exp(D)}。`, D.traits.length ? `客戶常說我${D.traits.join('、')}。` : '', PH('年資、證照、服務經歷——請只填真實資料')].filter(Boolean).join('\n') },
+    { key: 'about', label: '關於我', max: 1200, gen: (D) => [`我是${D.personName || PH('姓名')}${D.jobTitle ? `，${D.jobTitle}` : ''}。`, D.whoami ? `${D.whoami}。` : '', `主要服務${who(D)}，專注${exp(D)}。`, D.traits.length ? `客戶常說我${D.traits.join('、')}。` : '', PH('年資、證照、服務經歷——請只填真實資料')].filter(Boolean).join('\n') },
     { key: 'cta', label: '聯絡區說明', max: 200, gen: (D) => (D.toneFamily === '簡短俐落' ? '有需要，直接聯繫我。' : '想聊聊你的規劃？選一個方便的方式聯繫我，我會親自回覆。') },
   ],
 };

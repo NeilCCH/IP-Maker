@@ -3,6 +3,36 @@
 import { PALETTES, HUE_WORDS, HUE_NAMES } from './data/palettes.js';
 import { DESIGN_BY_ID } from './data/designs.js';
 import { hash } from './util.js';
+import { johari } from './data/questions.js';
+
+/** 品牌關鍵字：優先用「四個我」選出的 3 個；舊資料沿用個人特質 */
+export function keywordsOf(state) {
+  const k = state.answers.keywords || [];
+  return k.length ? k : (state.answers.traits || []);
+}
+
+// ---------- 色彩工具 ----------
+const toRGB = (hex) => { const n = parseInt(hex.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
+const toHex = (rgb) => '#' + rgb.map((v) => Math.round(Math.max(0, Math.min(255, v))).toString(16).padStart(2, '0')).join('');
+export const mix = (a, b, t) => { const x = toRGB(a), y = toRGB(b); return toHex(x.map((v, i) => v + (y[i] - v) * t)); };
+function luminance(hex) {
+  const c = toRGB(hex).map((v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; });
+  return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+}
+export function contrast(a, b) {
+  const [x, y] = [luminance(a), luminance(b)].sort((m, n) => n - m);
+  return (x + 0.05) / (y + 0.05);
+}
+
+/** 自訂色彩 → 完整色票；缺的顏色由主色推算 */
+export function customPalette(cc) {
+  const primary = cc.primary;
+  if (!primary) return null;
+  return {
+    id: 'custom', name: '自訂色彩', hues: [], traits: '使用你提供的色碼',
+    primary, accent: cc.accent || mix(primary, '#08b8d8', 0.5), bg: cc.bg || mix(primary, '#ffffff', 0.92), ink: mix(primary, '#0b1220', 0.78),
+  };
+}
 
 export const AVOID_FLAGS = {
   過度金色: 'gold', 米白復古配色: 'cream', 古典襯線字體: 'serif', 山景風景意象: 'landscape',
@@ -61,9 +91,12 @@ const conflictsWith = (palette, avoidHues) => palette.hues.filter((h) => avoidHu
 
 function autoPalette(state, avoidHues) {
   const style = state.answers.style[0];
-  const traits = state.answers.traits;
-  let pick = { 專業科技: 'electric', 簡潔俐落: 'graphite', 沉穩精緻: 'ocean', 親切自然: 'forest', 溫暖人文: 'clay', 活力明亮: 'coral', 時尚質感: 'graphite', 清新療癒: 'forest' }[style];
-  if (!pick) pick = traits.some((t) => /親切|溫度/.test(t)) ? 'forest' : traits.includes('年輕有活力') ? 'coral' : 'electric';
+  const kw = keywordsOf(state).join(' ');
+  // 「這 3 個詞讓我想到的顏色」優先
+  const feel = huesIn((state.freeform.keywords || '').replace(/不要[^，。,\n]*/g, ''));
+  const byFeel = PALETTES.find((p) => feel.length && feel.every((h) => p.hues.includes(h))) || PALETTES.find((p) => feel.some((h) => p.hues.includes(h)));
+  let pick = byFeel?.id || { 專業科技: 'electric', 簡潔俐落: 'graphite', 沉穩精緻: 'ocean', 親切自然: 'forest', 溫暖人文: 'clay', 活力明亮: 'coral', 時尚質感: 'graphite', 清新療癒: 'forest' }[style];
+  if (!pick) pick = /熱情|活力|積極|樂觀/.test(kw) ? 'coral' : /溫柔|體貼|親切|親和|照顧|溫度/.test(kw) ? 'forest' : /質感|品味/.test(kw) ? 'graphite' : /沉穩|穩重|安心/.test(kw) ? 'ocean' : 'electric';
   const ordered = [PALETTES.find((p) => p.id === pick), ...PALETTES];
   return ordered.find((p) => !conflictsWith(p, avoidHues).length) || PALETTES[0];
 }
@@ -83,6 +116,10 @@ export function detectConflicts(state) {
     if (missing.length)
       out.push({ id: 'palette-pref', qid: 'palette', message: `你的文字提到${missing.map((h) => HUE_NAMES[h]).join('、')}，但選的色卡沒有這個顏色。`, optionLabel: '以色卡為準', textLabel: '以文字為準（找相近配色）' });
   }
+  if (state.answers.font?.[0] === '明體・典雅' && avoidInfo(state).flags.has('serif'))
+    out.push({ id: 'font-serif', qid: 'font', message: '你選了「明體・典雅」，但避免事項有「古典襯線字體」。', optionLabel: '使用明體', textLabel: '改用現代黑體' });
+  if (state.answers.palette[0] === 'custom' && state.customColors?.primary && contrast(state.customColors.primary, '#ffffff') < 3)
+    out.push({ id: 'custom-contrast', qid: 'palette', message: '你的主色太淺，放在白底上的文字可能看不清楚。', optionLabel: '仍使用這個主色', textLabel: '自動加深主色' });
   const photoOpt = state.answers.photo[0];
   if (/不(要|放|想|露)[^，。]{0,4}(照片|臉|本人)|不露臉/.test(state.freeform.photo || '') && ['醒目呈現', '適度呈現'].includes(photoOpt))
     out.push({ id: 'photo-none', qid: 'photo', message: `你選了「${photoOpt}」，但文字寫到不想放照片。`, optionLabel: `照片${photoOpt}`, textLabel: '不放照片' });
@@ -106,6 +143,15 @@ export function parseReport(state, qid) {
 
 function resolvePalette(state, avoid) {
   const id = state.answers.palette[0];
+  if (id === 'custom') {
+    const c = customPalette(state.customColors || {});
+    if (c && state.resolutions['custom-contrast'] === 'text') {
+      let p = c.primary;
+      for (let i = 0; i < 12 && contrast(p, '#ffffff') < 4.5; i++) p = mix(p, '#000000', 0.12);
+      return { ...c, primary: p };
+    }
+    return c || { ...autoPalette(state, avoid.hues), auto: true };
+  }
   const pal = PALETTES.find((p) => p.id === id);
   if (!pal) return { ...autoPalette(state, avoid.hues), auto: true };
   if (conflictsWith(pal, avoid.hues).length && resolved(state, 'palette-avoid') === 'text') return { ...autoPalette(state, avoid.hues), auto: true };
@@ -130,13 +176,20 @@ function resolvePhotoMode(state) {
 function resolveTone(state) {
   const t = state.answers.tone[0];
   if (t && t !== '交由系統建議') return t;
-  const tr = state.answers.traits;
-  if (tr.includes('幽默風趣')) return '幽默輕鬆';
-  if (tr.includes('熱情積極') || tr.includes('年輕有活力')) return '熱情積極';
-  if (tr.some((x) => /溫度/.test(x))) return '溫暖貼心';
-  if (tr.some((x) => /親切|沉穩|誠懇/.test(x))) return '穩重親切';
-  if (tr.includes('思路清楚有效率')) return '簡短俐落';
+  const tr = keywordsOf(state).join(' ');
+  if (/幽默/.test(tr)) return '幽默輕鬆';
+  if (/熱情|活力|積極|樂觀|會鼓勵/.test(tr)) return '熱情積極';
+  if (/溫柔|體貼|同理|照顧|溫度/.test(tr)) return '溫暖貼心';
+  if (/親切|親和|隨和|沉穩|穩重|安心|誠懇|真誠/.test(tr)) return '穩重親切';
+  if (/有效率|有條理|果斷|直率|思路清楚/.test(tr)) return '簡短俐落';
+  if (/講解清楚|懂得多|謹慎|冷靜/.test(tr)) return '理性分析';
   return '專業直接';
+}
+
+function resolveFont(state) {
+  const f = state.answers.font?.[0];
+  if (f === '明體・典雅' && state.resolutions['font-serif'] === 'text') return '現代黑體・俐落';
+  return f && f !== '交由系統建議' ? f : '現代黑體・俐落';
 }
 
 export function positioningOf(state) {
@@ -170,7 +223,18 @@ export function derive(state, designId = state.selectedDesignId) {
     nameIsPlaceholder: !brandName && !personName,
     jobTitle: id.jobTitle.trim(),
     slogan: id.slogan.trim(),
-    traits: valuesOrText(state, 'traits'),
+    traits: keywordsOf(state),
+    keywords: keywordsOf(state),
+    selfWords: state.answers.selfWords || [],
+    partnerWords: state.answers.partnerWords || [],
+    johari: johari(state.answers.selfWords || [], state.answers.partnerWords || []),
+    whoami: (id.whoami || '').trim(),
+    audiencePain: (state.freeform.audience || '').trim(),
+    feeling: (state.freeform.keywords || '').trim(),
+    toneOrder: (state.answers.toneOrder || [])[0] || '',
+    font: resolveFont(state),
+    imagery: (state.answers.imagery || []).filter((v) => v !== '交由系統建議'),
+    signature: state.answers.signature || [],
     audience: valuesOrText(state, 'audience', 20),
     expertise: valuesOrText(state, 'expertise', 20),
     services: state.platforms.lineOA.entries,
@@ -210,7 +274,7 @@ const NAME_BANK = {
 export function nameProposals(state) {
   const dir = state.answers.naming[0];
   const pool = dir && NAME_BANK[dir] ? NAME_BANK[dir] : [...NAME_BANK.穩健安心, ...NAME_BANK.理性前瞻, ...NAME_BANK.人生從容];
-  const seed = parseInt(hash(state.answers.expertise.join() + state.answers.traits.join() + state.namingSeed), 36);
+  const seed = parseInt(hash(state.answers.expertise.join() + keywordsOf(state).join() + state.namingSeed), 36);
   const picks = [];
   for (let i = 0; picks.length < 3 && i < pool.length * 2; i++) {
     const n = pool[(seed + i * 7) % pool.length];

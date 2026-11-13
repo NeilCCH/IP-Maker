@@ -1,6 +1,6 @@
 // 品牌資料模型（schemaVersion 2）：品牌核心與各平台配置分開管理。
 // 支援：舊版展示版進度（oa-brand-studio-v1）、舊版「共用品牌資料.json」(schemaVersion 1) 匯入遷移。
-import { QUESTIONS, SERVICE_CATALOG } from './data/questions.js';
+import { QUESTIONS, SERVICE_CATALOG, EXTRA_ANSWER_IDS, ALL_WORDS } from './data/questions.js';
 import { PALETTES } from './data/palettes.js';
 import { DESIGN_BY_ID } from './data/designs.js';
 import { str, strArr, safeURL } from './util.js';
@@ -27,10 +27,11 @@ export function fresh() {
     schemaVersion: SCHEMA_VERSION,
     app: 'brand-studio',
     meta: { createdAt: now, updatedAt: now, qIndex: 0, started: false, target: 'lineOA', lastBackupAt: '' },
-    answers: Object.fromEntries(QUESTIONS.map((q) => [q.id, []])),
+    answers: Object.fromEntries([...QUESTIONS.map((q) => q.id), ...EXTRA_ANSWER_IDS].map((id) => [id, []])),
     freeform: Object.fromEntries(QUESTIONS.map((q) => [q.id, ''])),
     resolutions: {},
-    identity: { brandName: '', personName: '', jobTitle: '', slogan: '', positioning: '', contact: { line: '', phone: '', email: '', area: '' } },
+    identity: { brandName: '', personName: '', jobTitle: '', slogan: '', positioning: '', whoami: '', contact: { line: '', phone: '', email: '', area: '' } },
+    customColors: { primary: '', accent: '', bg: '' },
     photo: '',
     namingSeed: 0,
     selectedDesignId: 'tech',
@@ -104,15 +105,22 @@ export function sanitize(x) {
   n.meta.target = PLATFORM_IDS.includes(x.meta?.target) ? x.meta.target : 'lineOA';
   n.meta.lastBackupAt = Number.isFinite(Date.parse(x.meta?.lastBackupAt)) ? str(x.meta.lastBackupAt, 40) : '';
   for (const q of QUESTIONS) {
-    n.answers[q.id] = strArr(x.answers?.[q.id], q.max || 16, 40);
+    let a = strArr(x.answers?.[q.id], q.max || 16, 40);
+    if (q.type === 'words') a = a.filter((w) => ALL_WORDS.includes(w)); // 圈詞只接受詞庫裡的詞
+    if (q.type === 'keywords') a = a.map((w) => w.slice(0, 12));
+    n.answers[q.id] = a;
     n.freeform[q.id] = str(x.freeform?.[q.id], 3000);
   }
+  n.answers.traits = strArr(x.answers?.traits, 3, 40);
+  n.answers.toneOrder = strArr(x.answers?.toneOrder, 1, 20);
+  const hex = (v) => (/^#[0-9a-f]{6}$/i.test(String(v || '')) ? String(v).toLowerCase() : '');
+  n.customColors = { primary: hex(x.customColors?.primary), accent: hex(x.customColors?.accent), bg: hex(x.customColors?.bg) };
   if (x.resolutions && typeof x.resolutions === 'object')
     for (const [k, v] of Object.entries(x.resolutions)) if (v === 'option' || v === 'text') n.resolutions[str(k, 60)] = v;
   const id = x.identity || {};
   n.identity = {
     brandName: str(id.brandName, 30), personName: str(id.personName, 30), jobTitle: str(id.jobTitle, 40),
-    slogan: str(id.slogan, 60), positioning: str(id.positioning, 60),
+    slogan: str(id.slogan, 60), positioning: str(id.positioning, 60), whoami: str(id.whoami, 80),
     contact: { line: str(id.contact?.line, 200), phone: str(id.contact?.phone, 40), email: str(id.contact?.email, 120), area: str(id.contact?.area, 60) },
   };
   n.photo = typeof x.photo === 'string' && /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(x.photo) && x.photo.length < 3_000_000 ? x.photo : '';
@@ -237,7 +245,13 @@ export function exportJSON(state) {
 export function sampleHengYuan() {
   const n = fresh();
   Object.assign(n.answers, {
-    traits: ['專業可靠', '思路清楚有效率'],
+    selfWords: ['專業', '有遠見', '有條理', '有效率', '值得信任', '果斷'],
+    partnerWords: ['專業', '有遠見', '讓人安心', '講解清楚', '值得信任', '沉穩'],
+    keywords: ['專業', '有遠見', '值得信任'],
+    toneOrder: ['先講重點'],
+    font: ['現代黑體・俐落'],
+    imagery: ['專業形象照', '簡潔幾何圖形', '數據圖表感'],
+    signature: ['名字文字標', '固定主色', '固定標語'],
     audience: ['退休與準退休者', '企業主與自營業者'],
     expertise: ['退休生活與現金流', '企業與家庭風險'],
     services: ['認識我', '退休規劃', '企業風險', '家庭保障', '實用資訊', '預約諮詢', '常見問題', '留言給我'],
@@ -251,6 +265,9 @@ export function sampleHengYuan() {
   });
   n.freeform.avoid = '不要深藍＋米白＋香檳金＋山景＋古典字體的組合，像訃聞。';
   n.freeform.style = '最初選沉穩精緻，看到設計後改為專業科技感。';
+  n.freeform.keywords = '冷白、電光藍、青藍；俐落、清楚、有層次。';
+  n.freeform.audience = '55 歲上下準備退休、或經營中小企業的老闆；擔心退休後現金流不夠，也擔心公司風險影響家庭。';
+  n.identity.whoami = '陪準退休族與企業主，把退休與風險想清楚的規劃顧問';
   n.identity.brandName = '衡遠';
   n.identity.slogan = '衡量當下，規劃長遠';
   n.identity.positioning = '退休規劃・企業與家庭風險';

@@ -1,7 +1,7 @@
 // 第一步：說說你自己——一次一題、清楚標示單／多選、常駐自由回答、自動保存
-import { QUESTIONS, selectionLabel, Q_BY_ID } from '../data/questions.js';
+import { QUESTIONS, selectionLabel, Q_BY_ID, WORD_GROUPS, johari } from '../data/questions.js';
 import { PALETTES, AUTO_PALETTE, HUE_NAMES } from '../data/palettes.js';
-import { detectConflicts, parseReport, nameProposals, sloganProposals, derive, positioningOf } from '../brand.js';
+import { detectConflicts, parseReport, nameProposals, sloganProposals, derive, positioningOf, customPalette } from '../brand.js';
 import { syncEntries } from '../model.js';
 import { store, commit, save } from '../store.js';
 import { esc, toast, debounce } from '../util.js';
@@ -15,6 +15,7 @@ function isAnswered(q) {
   const s = S();
   if (q.type === 'name') return !!s.identity.brandName.trim();
   if (q.type === 'contact') return Object.values(s.identity.contact).some((v) => v.trim());
+  if (q.type === 'words' || q.type === 'keywords') return s.answers[q.id]?.length > 0;
   return s.answers[q.id]?.length > 0 || !!(s.freeform[q.id] || '').trim();
 }
 
@@ -27,6 +28,40 @@ function optionButtons(q) {
       return `<button type="button" class="opt" data-action="opt" data-v="${esc(o)}" aria-pressed="${on}">${on ? icon('shield', 'ic tick') : ''}<span>${esc(o)}</span>${ex ? `<small>${esc(ex)}</small>` : ''}</button>`;
     })
     .join('')}</div>`;
+}
+
+function wordsBlock(q) {
+  const a = answers(q.id);
+  const partner = q.id === 'partnerWords';
+  return `${partner ? `<div class="hand-over">${icon('person')}<p><b>請把手機交給夥伴</b><br>夥伴選完再交回給你。下一題會比對兩人選的詞，整理出「四個我」。</p></div>` : ''}
+  <p class="count-line" aria-live="polite">已選 <b>${a.length}</b> / ${q.max}</p>
+  ${WORD_GROUPS.map((g) => `<fieldset class="word-group"><legend>${g.name}</legend><div class="words">${g.words.map((w) => `<button type="button" class="word ${partner ? 'red' : ''}" data-action="word" data-v="${esc(w)}" aria-pressed="${a.includes(w)}">${esc(w)}</button>`).join('')}</div></fieldset>`).join('')}
+  ${partner && !a.length ? '<p class="hint">暫時沒有夥伴？按「下一題」先跳過，之後隨時可以從右邊的題目清單回來補。</p>' : ''}`;
+}
+
+const JOHARI_BOX = [
+  ['open', '開放我', '你和夥伴都圈到', '你的品牌核心，最有說服力'],
+  ['blind', '盲目我', '只有夥伴圈到', '別人看見、你還沒發現的優勢'],
+  ['hidden', '隱藏我', '只有你自己圈到', '你有，但要讓更多人感受到'],
+  ['unknown', '未知我', '兩個人都沒圈', '先放著，以後慢慢探索'],
+];
+
+function keywordsBlock(q) {
+  const s = S();
+  const J = johari(s.answers.selfWords, s.answers.partnerWords);
+  const kw = answers('keywords');
+  const chip = (w) => `<button type="button" class="word" data-action="kw" data-v="${esc(w)}" aria-pressed="${kw.includes(w)}">${esc(w)}</button>`;
+  const noSelf = !s.answers.selfWords.length;
+  const noPartner = !s.answers.partnerWords.length;
+  const custom = kw.filter((w) => ![...J.open, ...J.blind, ...J.hidden].includes(w));
+  return `${noSelf ? '<p class="conflict">還沒有圈詞。建議先回到前兩題圈選，或直接在下方輸入你的關鍵字。</p>' : ''}
+  ${!noSelf && noPartner ? '<p class="hint warn-text">還沒有請夥伴圈，所以目前只有「隱藏我」。有夥伴圈之後，結果會更準。</p>' : ''}
+  <div class="johari">${JOHARI_BOX.map(([k, name, who, meaning]) => `<section class="jbox j-${k}"><h3>${name}</h3><p class="who">${who}</p><p class="meaning">${meaning}</p>
+    ${k === 'unknown' ? `<p class="hint">${J.unknown.length} 個詞</p>` : `<div class="words">${J[k].length ? J[k].map(chip).join('') : '<span class="hint">（沒有）</span>'}</div>`}</section>`).join('')}</div>
+  <h3 class="kw-title">我的 3 個品牌關鍵字 <span class="hint">（點上面的詞加入，已選 ${kw.length} / 3）</span></h3>
+  <ol class="kw-slots">${[0, 1, 2].map((i) => `<li>${kw[i] ? `<b>${esc(kw[i])}</b><button type="button" class="icon-btn" data-action="kw" data-v="${esc(kw[i])}" aria-label="移除 ${esc(kw[i])}">×</button>` : '<span class="hint">尚未選擇</span>'}</li>`).join('')}</ol>
+  ${custom.length ? '' : ''}
+  <div class="inline-add"><label class="field grow"><span>也可以自己寫一個關鍵字（最多 8 個字）</span><input id="kwCustom" maxlength="8" placeholder="例如：說到做到"></label><button type="button" class="btn" data-action="kw-add">加入</button></div>`;
 }
 
 function orderBlock(q) {
@@ -54,8 +89,16 @@ function paletteBlock() {
       ${bad.length ? `<em class="warn">與你的禁忌衝突：${bad.map((h) => HUE_NAMES[h]).join('、')}</em>` : ''}
       ${on ? '<span class="sel">已選</span>' : ''}</button>`;
   };
-  const autoNote = !sel || sel === 'auto' ? `<p class="hint">目前系統建議：<b>${esc(D.palette.name)}</b></p>` : '';
-  return `<div class="pals">${PALETTES.map(card).join('')}${card(AUTO_PALETTE)}</div>${autoNote}`;
+  const autoNote = !sel || sel === 'auto' ? `<p class="hint">目前系統建議：<b>${esc(D.palette.name)}</b>${S().freeform.keywords ? '（已參考你寫的顏色與感覺）' : ''}</p>` : '';
+  const cc = S().customColors;
+  const cp = customPalette(cc);
+  const customCard = `<button type="button" class="pal" data-action="pal" data-v="custom" aria-pressed="${sel === 'custom'}">
+      <span class="sw">${cp ? [cp.primary, cp.accent, cp.bg].map((c) => `<i style="background:${c}"></i>`).join('') : '<i class="auto"></i>'}</span>
+      <b>自訂色彩</b><small>已經有自己的色碼？填入主色、輔助色、底色</small>${sel === 'custom' ? '<span class="sel">已選</span>' : ''}</button>`;
+  const colorField = (k, label, hint) => `<label class="field color-field"><span>${label}<small>${hint}</small></span><span class="color-row"><input type="color" data-color="${k}" value="${cc[k] || (cp ? cp[k] : '#155eef')}" aria-label="${label}色盤"><input type="text" data-color-hex="${k}" value="${esc(cc[k])}" placeholder="#155EEF" maxlength="7" inputmode="text" aria-label="${label}色碼"></span></label>`;
+  const editor = sel === 'custom' ? `<div class="card soft custom-colors"><p><b>自訂色彩</b>：可以點色塊挑顏色，或直接輸入色碼（例如 #155EEF）。只填主色也可以，其他顏色會自動搭配。</p>
+    <div class="grid3">${colorField('primary', '主色', '標題、按鈕')}${colorField('accent', '輔助色', '重點、線條')}${colorField('bg', '底色', '背景、卡片')}</div></div>` : '';
+  return `<div class="pals">${PALETTES.map(card).join('')}${customCard}${card(AUTO_PALETTE)}</div>${editor}${autoNote}`;
 }
 
 function photoBlock(q) {
@@ -74,11 +117,26 @@ function photoBlock(q) {
 function nameBlock() {
   const s = S();
   const id = s.identity;
-  return `<label class="field"><span>品牌名稱</span><input data-id-field="brandName" maxlength="30" value="${esc(id.brandName)}" placeholder="輸入既有名稱，或從下方提案選一個" autocomplete="off"></label>
+  return `<label class="field"><span>我是誰（一句話介紹自己）</span><input data-id-field="whoami" maxlength="80" value="${esc(id.whoami)}" placeholder="例如：陪準退休族把退休與風險想清楚的規劃顧問"></label>
+  <div class="proposal-row"><span class="label">句子提案</span>${whoamiProposals().map((n) => `<button type="button" class="chip" data-action="whoami-pick" data-v="${esc(n)}" aria-pressed="${id.whoami === n}">${esc(n)}</button>`).join('')}</div>
+  <label class="field"><span>品牌名稱</span><input data-id-field="brandName" maxlength="30" value="${esc(id.brandName)}" placeholder="輸入既有名稱，或從下方提案選一個" autocomplete="off"></label>
   <div class="proposal-row"><span class="label">名稱提案</span>${nameProposals(s).map((n) => `<button type="button" class="chip" data-action="name-pick" data-v="${esc(n)}" aria-pressed="${id.brandName === n}">${esc(n)}</button>`).join('')}<button type="button" class="chip ghost" data-action="name-more">換一批</button></div>
-  <label class="field"><span>品牌標語（選填）</span><input data-id-field="slogan" maxlength="30" value="${esc(id.slogan)}" placeholder="一句話說明你帶給客戶什麼"></label>
+  <label class="field"><span>我的一句話（品牌標語，選填）</span><input data-id-field="slogan" maxlength="30" value="${esc(id.slogan)}" placeholder="一句話說明你帶給客戶什麼"></label>
   <div class="proposal-row"><span class="label">標語提案</span>${sloganProposals(s).map((n) => `<button type="button" class="chip" data-action="slogan-pick" data-v="${esc(n)}" aria-pressed="${id.slogan === n}">${esc(n)}</button>`).join('')}</div>
   <label class="field"><span>定位文字（選填，留白則依專長自動產生）</span><input data-id-field="positioning" maxlength="30" value="${esc(id.positioning)}" placeholder="${esc(positioningOf({ ...s, identity: { ...id, positioning: '' } }))}"></label>`;
+}
+
+function whoamiProposals() {
+  const D = derive(S());
+  const aud = D.audience[0] || '客戶';
+  const exp = D.expertise.length ? D.expertise.slice(0, 2).join('與') : '保險規劃';
+  const role = D.jobTitle || '規劃顧問';
+  const kw = D.keywords;
+  return [
+    `陪${aud}把${exp}想清楚的${role}`,
+    kw.length >= 2 ? `${kw[0]}、${kw[1]}的${role}，專注${exp}` : `專注${exp}的${role}`,
+    `讓${aud}安心的${D.positioning}夥伴`,
+  ].map((t) => t.slice(0, 80));
 }
 
 function displayBlock(q) {
@@ -95,6 +153,12 @@ function contactBlock() {
   const c = S().identity.contact;
   const f = (k, label, type, ph, ac) => `<label class="field"><span>${label}</span><input data-contact="${k}" type="${type}" value="${esc(c[k])}" placeholder="${ph}" ${ac ? `autocomplete="${ac}"` : ''} inputmode="${type === 'tel' ? 'tel' : type === 'email' ? 'email' : type === 'url' ? 'url' : 'text'}"></label>`;
   return `<div class="grid2">${f('line', 'LINE 官方帳號網址', 'url', 'https://lin.ee/…', '')}${f('phone', '電話', 'tel', '0912-345-678', 'tel')}${f('email', 'Email', 'email', 'name@example.com', 'email')}${f('area', '服務地區', 'text', '例如：台北、新北', '')}</div>`;
+}
+
+function extraBlock(q) {
+  if (!q.extra) return '';
+  const a = answers(q.extra.id) || [];
+  return `<div class="field"><span class="flabel">${esc(q.extra.label)}（單選）</span><div class="row">${q.extra.options.map((o) => `<button type="button" class="chip" data-action="extra-opt" data-v="${esc(o)}" aria-pressed="${a.includes(o)}">${esc(o)}</button>`).join('')}</div></div>`;
 }
 
 function conflictBlock(qid) {
@@ -126,24 +190,26 @@ export function render(root) {
     : q.type === 'name' ? nameBlock()
     : q.type === 'display' ? displayBlock(q)
     : q.type === 'contact' ? contactBlock()
-    : optionButtons(q);
+    : q.type === 'words' ? wordsBlock(q)
+    : q.type === 'keywords' ? keywordsBlock(q)
+    : optionButtons(q) + extraBlock(q);
   const done = QUESTIONS.filter(isAnswered).length;
   root.innerHTML = `
   <div class="page-head"><p class="eyebrow">第一步</p><h1 tabindex="-1">說說你自己</h1><p class="lead">一次一題。可以只點選項、選項加文字，或不選直接打字。每一題都會自動保存，隨時可以回來改。</p></div>
   <div class="q-layout">
     <section class="card q-card" aria-labelledby="qTitle">
       <div class="q-progress"><span>第 ${i + 1} / ${QUESTIONS.length} 題・已回答 ${done} 題</span><div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="${QUESTIONS.length}" aria-valuenow="${i + 1}"><i style="width:${((i + 1) / QUESTIONS.length) * 100}%"></i></div></div>
-      <p class="q-short">${esc(q.short)}</p>
+      <p class="q-short">${esc(q.section)}・${esc(q.short)}</p>
       <h2 id="qTitle">${esc(q.title)}</h2>
       <p class="q-badge">${selectionLabel(q)}</p>
       ${q.hint ? `<p class="hint">${esc(q.hint)}</p>` : ''}
       ${body}
       ${conflictBlock(q.id)}
-      <label class="field freeform"><span>自行補充／其他想法（選填，可不選上面的選項直接寫）</span><textarea data-ff="${q.id}" rows="3" maxlength="3000" placeholder="寫下你的想法、喜好，或希望避免的地方…">${esc(s.freeform[q.id])}</textarea></label>
+      <label class="field freeform"><span>${q.type === 'keywords' ? '這 3 個詞讓你想到的顏色和感覺（選填，會用來建議配色）' : '自行補充／其他想法（選填，可不選上面的選項直接寫）'}</span><textarea data-ff="${q.id}" rows="3" maxlength="3000" placeholder="${esc(q.type === 'keywords' ? '例如：冷白、深海藍；俐落、安心、有層次' : q.placeholder || '寫下你的想法、喜好，或希望避免的地方…')}">${esc(s.freeform[q.id])}</textarea></label>
       <div id="parseBox">${parseBlock(q.id)}</div>
       <div class="q-nav">
         <button type="button" class="btn ghost" data-action="q-prev" ${i === 0 ? 'disabled' : ''}>← 上一題</button>
-        <button type="button" class="btn primary" data-action="q-next">${i === QUESTIONS.length - 1 ? '完成，選喜歡的樣子 →' : '下一題 →'}</button>
+        <button type="button" class="btn primary" data-action="q-next">${i === QUESTIONS.length - 1 ? '完成，選喜歡的樣子 →' : q.optional && !answers(q.id).length ? '先跳過 →' : '下一題 →'}</button>
       </div>
     </section>
     <aside class="q-side">
@@ -187,7 +253,41 @@ export function onAction(act, el) {
   const q = QUESTIONS[s.meta.qIndex];
   switch (act) {
     case 'opt': if (toggle(q, el.dataset.v)) commit(); break;
-    case 'pal': s.answers.palette = s.answers.palette[0] === el.dataset.v ? [] : [el.dataset.v]; commit(); break;
+    case 'pal': s.answers.palette = s.answers.palette[0] === el.dataset.v && el.dataset.v !== 'custom' ? [] : [el.dataset.v]; commit(); break;
+    case 'word': {
+      const a = s.answers[q.id], v = el.dataset.v;
+      if (a.includes(v)) s.answers[q.id] = a.filter((x) => x !== v);
+      else if (a.length >= q.max) return toast(`最多圈 ${q.max} 個，可以先取消一個`);
+      else s.answers[q.id] = [...a, v];
+      // 夥伴圈的詞改變後，移除已不在四個我裡的關鍵字不需要：關鍵字可自由保留
+      commit();
+      break;
+    }
+    case 'kw': {
+      const a = s.answers.keywords, v = el.dataset.v;
+      if (a.includes(v)) s.answers.keywords = a.filter((x) => x !== v);
+      else if (a.length >= 3) return toast('最多 3 個關鍵字，可以先移除一個');
+      else s.answers.keywords = [...a, v];
+      commit();
+      break;
+    }
+    case 'kw-add': {
+      const inp = document.getElementById('kwCustom');
+      const v = inp.value.trim().slice(0, 8);
+      if (!v) return toast('請先輸入關鍵字');
+      if (s.answers.keywords.includes(v)) return toast('這個關鍵字已經選了');
+      if (s.answers.keywords.length >= 3) return toast('最多 3 個關鍵字，可以先移除一個');
+      s.answers.keywords.push(v);
+      commit();
+      break;
+    }
+    case 'extra-opt': {
+      const id = q.extra.id;
+      s.answers[id] = (s.answers[id] || [])[0] === el.dataset.v ? [] : [el.dataset.v];
+      commit();
+      break;
+    }
+    case 'whoami-pick': s.identity.whoami = el.dataset.v; commit(); break;
     case 'svc-add': {
       const inp = document.getElementById('svcCustom');
       const v = inp.value.trim().slice(0, 8);
@@ -241,12 +341,25 @@ export function onInput(el) {
     return true;
   }
   if (el.dataset.idField) {
-    const max = { brandName: 30, slogan: 30, positioning: 30, personName: 30, jobTitle: 40 }[el.dataset.idField];
+    const max = { brandName: 30, slogan: 30, positioning: 30, personName: 30, jobTitle: 40, whoami: 80 }[el.dataset.idField];
     s.identity[el.dataset.idField] = el.value.slice(0, max);
     save();
     const live = document.querySelector('[data-live="displayName"]');
     if (live) live.textContent = derive(s).displayName;
     document.querySelectorAll('[data-action="name-pick"],[data-action="slogan-pick"]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.v === s.identity[b.dataset.action === 'name-pick' ? 'brandName' : 'slogan'])));
+    paintMini();
+    return true;
+  }
+  if (el.dataset.color || el.dataset.colorHex) {
+    const k = el.dataset.color || el.dataset.colorHex;
+    let v = el.value.trim();
+    if (v && !v.startsWith('#')) v = '#' + v;
+    if (!/^#[0-9a-f]{6}$/i.test(v)) { if (el.dataset.colorHex && v.length >= 7) toast('色碼格式像這樣：#155EEF'); return true; }
+    s.customColors[k] = v.toLowerCase();
+    save();
+    const other = document.querySelector(el.dataset.color ? `[data-color-hex="${k}"]` : `[data-color="${k}"]`);
+    if (other && other.value.toLowerCase() !== v.toLowerCase()) other.value = el.dataset.color ? v.toUpperCase() : v.toLowerCase();
+    refreshConflicts('palette');
     paintMini();
     return true;
   }

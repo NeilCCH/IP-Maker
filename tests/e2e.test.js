@@ -57,19 +57,41 @@ const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'brand-e2e-'));
     assert(!(await page.content()).includes('衡遠'), '畫面含有衡遠');
   });
 
-  await test('可只選選項、選項加文字、純文字回答；多選上限有效', async () => {
+  const QI = await page.evaluate(async (u) => Object.fromEntries((await import(u)).QUESTIONS.map((q, i) => [q.id, i])), mod('data/questions.js'));
+  const jumpTo = async (id) => { const st = await state(); st.meta.qIndex = QI[id]; await setState(st); await go('#/profile'); };
+
+  await test('四個我：自己圈 6 個、夥伴圈 6 個（可跳過），自動整理並選 3 個關鍵字', async () => {
     await go('#/profile');
-    await page.click('[data-action="opt"][data-v="專業可靠"]');
-    await page.click('[data-action="opt"][data-v="親切好聊"]');
-    await page.click('[data-action="opt"][data-v="沉穩安心"]');
-    await page.click('[data-action="opt"][data-v="熱情積極"]'); // 超過上限 3
+    assert((await page.$$('[data-action="word"]')).length === 48, '詞庫不是 48 個詞');
+    for (const w of ['沉穩', '果斷', '務實', '值得信任', '真誠', '有質感', '有遠見']) await page.click(`[data-action="word"][data-v="${w}"]`);
     let s = await state();
-    assert(s.answers.traits.length === 3, `多選上限未生效：${s.answers.traits}`);
-    assert((await page.$$('[data-action="opt"]')).length === 9, '個人特質不是 9 個選項');
-    await page.fill('[data-ff="traits"]', '希望像朋友一樣可靠');
-    s = await state();
-    assert(s.freeform.traits === '希望像朋友一樣可靠', '補充文字未保存');
+    assert(s.answers.selfWords.length === 6 && !s.answers.selfWords.includes('有遠見'), `自己圈的詞上限錯誤：${s.answers.selfWords}`);
+    await page.fill('[data-ff="selfWords"]', '其實我也很會照顧人');
     await page.click('[data-action="q-next"]');
+    assert((await page.textContent('[data-action="q-next"]')).includes('跳過'), '夥伴題沒有可跳過的提示');
+    for (const w of ['沉穩', '有創意', '務實', '讓人安心', '有遠見', '有說服力']) await page.click(`[data-action="word"][data-v="${w}"]`);
+    await page.click('[data-action="q-next"]');
+    const open = await page.$$eval('.j-open [data-action="kw"]', (bs) => bs.map((b) => b.dataset.v));
+    const blind = await page.$$eval('.j-blind [data-action="kw"]', (bs) => bs.map((b) => b.dataset.v));
+    const hidden = await page.$$eval('.j-hidden [data-action="kw"]', (bs) => bs.map((b) => b.dataset.v));
+    assert(JSON.stringify(open) === JSON.stringify(['沉穩', '務實']), `開放我錯誤：${open}`);
+    assert(['有創意', '讓人安心', '有遠見', '有說服力'].every((w) => blind.includes(w)), `盲目我錯誤：${blind}`);
+    assert(['果斷', '值得信任', '真誠', '有質感'].every((w) => hidden.includes(w)), `隱藏我錯誤：${hidden}`);
+    for (const w of ['沉穩', '務實', '有遠見', '讓人安心']) await page.click(`.johari [data-action="kw"][data-v="${w}"]`);
+    s = await state();
+    assert(JSON.stringify(s.answers.keywords) === JSON.stringify(['沉穩', '務實', '有遠見']), `關鍵字錯誤：${s.answers.keywords}`);
+    await page.fill('[data-ff="keywords"]', '深海藍、青色；沉穩、清楚');
+    const pal = await page.evaluate(async (u) => (await import(u)).derive(JSON.parse(localStorage.getItem('brand-studio-v2'))).palette.hues, mod('brand.js'));
+    assert(pal.includes('blue') || pal.includes('cyan'), `顏色感覺沒有影響建議配色：${pal}`);
+  });
+
+  await test('可只選選項、選項加文字、純文字回答；多選上限有效', async () => {
+    await jumpTo('audience');
+    for (const v of ['成熟家庭', '高資產族群', '單身與頂客族', '新婚與新手爸媽']) await page.click(`[data-action="opt"][data-v="${v}"]`);
+    let s = await state();
+    assert(s.answers.audience.length === 3, `多選上限未生效：${s.answers.audience}`);
+    assert((await page.$$('[data-action="opt"]')).length === 9, '客群不是 9 個選項');
+    for (const v of ['成熟家庭', '高資產族群', '單身與頂客族']) await page.click(`[data-action="opt"][data-v="${v}"]`);
     await page.fill('[data-ff="audience"]', '科技業工程師');
     const D = await page.evaluate(async (u) => { const b = await import(u); const st = JSON.parse(localStorage.getItem('brand-studio-v2')); return b.derive(st).audience; }, mod('brand.js'));
     assert(D[0] === '科技業工程師', `純文字回答未成為答案：${D}`);
@@ -88,7 +110,7 @@ const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'brand-e2e-'));
     const s = await state();
     s.answers.palette = ['violet'];
     s.freeform.avoid = '不要紫色';
-    s.meta.qIndex = 6;
+    s.meta.qIndex = QI.palette;
     await setState(s);
     await go('#/profile');
     assert(await page.isVisible('.conflict'), '未顯示衝突提示');
@@ -129,6 +151,49 @@ const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'brand-e2e-'));
     const s = await state();
     assert(s && s.identity.brandName === '自動轉入', '舊版資料未自動轉入');
     assert(await page.evaluate(() => !!localStorage.getItem('oa-brand-studio-v1')), '舊版資料被刪除');
+  });
+
+  await test('九宮格新題：說話順序、自訂色碼、字型與禁忌衝突、我是誰', async () => {
+    await jumpTo('tone');
+    await page.click('[data-action="extra-opt"][data-v="先講重點"]');
+    assert((await state()).answers.toneOrder[0] === '先講重點', '說話順序未保存');
+    await jumpTo('palette');
+    await page.click('[data-action="pal"][data-v="custom"]');
+    await page.fill('[data-color-hex="primary"]', '#1E3A8A');
+    let D = await page.evaluate(async (u) => (await import(u)).derive(JSON.parse(localStorage.getItem('brand-studio-v2'))), mod('brand.js'));
+    assert(D.palette.id === 'custom' && D.palette.primary === '#1e3a8a' && /^#[0-9a-f]{6}$/.test(D.palette.bg), `自訂色彩未套用 ${JSON.stringify(D.palette)}`);
+    await page.fill('[data-color-hex="primary"]', '#FDE68A');
+    assert(await page.isVisible('.conflict'), '主色太淺沒有提醒');
+    await page.click('[data-action="resolve"][data-id="custom-contrast"][data-v="text"]');
+    D = await page.evaluate(async (u) => (await import(u)).derive(JSON.parse(localStorage.getItem('brand-studio-v2'))), mod('brand.js'));
+    const c = await page.evaluate(async ([u, p]) => (await import(u)).contrast(p, '#ffffff'), [mod('brand.js'), D.palette.primary]);
+    assert(c >= 4.5, `自動加深後對比不足 ${c}`);
+    const st = await state();
+    st.answers.avoid = ['古典襯線字體'];
+    st.answers.font = ['明體・典雅'];
+    st.meta.qIndex = QI.font;
+    await setState(st);
+    await go('#/profile');
+    assert(await page.isVisible('[data-action="resolve"][data-id="font-serif"]'), '字型與禁忌衝突沒有提醒');
+    await jumpTo('name');
+    await page.click('[data-action="whoami-pick"]');
+    assert((await state()).identity.whoami.length > 5, '我是誰提案未套用');
+  });
+
+  await test('品牌規範：內容完整、待補項目標示、可複製與下載', async () => {
+    await page.evaluate(async (u) => { const m = await import(u); localStorage.setItem('brand-studio-v2', JSON.stringify(m.sampleHengYuan())); }, mod('model.js'));
+    await go('#/results/lineOA/preview');
+    assert(await page.isVisible('[data-action="guide-copy"]'), '沒有品牌規範區塊');
+    const md = await page.evaluate(async ([g, b]) => { const G = await import(g); const B = await import(b); const st = JSON.parse(localStorage.getItem('brand-studio-v2')); return { md: G.brandMd(st, B.derive(st)), prompt: G.guidePrompt(st, B.derive(st)), miss: G.missingItems(st, B.derive(st)) }; }, [mod('brandguide.js'), mod('brand.js')]);
+    for (const k of ['品牌核心', '我是誰', '服務對象', '三個品牌關鍵字', '開放我', '語氣規則', '三個「不要」', '#155eef', '約 60%', '字型層級', '標題', '內文', '數字', '圖像風格', '識別方式', '衡量當下，規劃長遠'])
+      assert(md.md.includes(k), `brand.md 缺少「${k}」`);
+    assert(md.prompt.includes('一次只問一題') || md.prompt.includes('一次問我一題'), '提示詞沒有逐題訪問的指示');
+    assert(md.prompt.includes('都要照這份規範'), '提示詞沒有之後照規範的指示');
+    const [dl] = await Promise.all([page.waitForEvent('download'), page.click('[data-action="guide-dl"]')]);
+    assert(dl.suggestedFilename() === 'brand.md', `下載檔名 ${dl.suggestedFilename()}`);
+    // 空白資料：待補項目會列出，讓 AI 逐題訪問
+    const empty = await page.evaluate(async ([g, b, m]) => { const G = await import(g); const B = await import(b); const M = await import(m); const st = M.fresh(); return G.guidePrompt(st, B.derive(st)); }, [mod('brandguide.js'), mod('brand.js'), mod('model.js')]);
+    assert(empty.includes('【待補】') && empty.includes('一次只問一題'), '空白規範沒有待補標示');
   });
 
   console.log('風格與平台');
@@ -396,7 +461,7 @@ const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'brand-e2e-'));
 
   await test('照片上傳後套用到素材；選「不放照片」則不出現', async () => {
     await go('#/profile');
-    await page.evaluate(() => { const s = JSON.parse(localStorage.getItem('brand-studio-v2')); s.meta.qIndex = 7; localStorage.setItem('brand-studio-v2', JSON.stringify(s)); });
+    await page.evaluate((i) => { const s = JSON.parse(localStorage.getItem('brand-studio-v2')); s.meta.qIndex = i; localStorage.setItem('brand-studio-v2', JSON.stringify(s)); }, QI.photo);
     await go('#/profile');
     const png = path.join(TMP, 'face.png');
     execFileSync('python3', ['-I', '-c', 'from PIL import Image;Image.new("RGB",(800,1000),(200,30,30)).save(__import__("sys").argv[1])', png]);

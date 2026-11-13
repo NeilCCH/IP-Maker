@@ -7,6 +7,8 @@ import { layout, pageEntries, entryStatus, richMenuConfig, RM_W, RM_H } from '..
 import { entriesOutOfSync, entriesFromServices } from '../model.js';
 import { websiteHTML } from '../website.js';
 import { prepare, assetBlob, platformZip, textsTxt, guideDynamic, replyList } from '../export.js';
+import { qIndexOf } from '../data/questions.js';
+import { brandMd, guidePrompt, missingItems } from '../brandguide.js';
 import { ENTRY_TYPES, TYPE_NAME, replyValue, generateReply, formScript, formManual, formEntries, parseFormResult, LINE_REPLY_MAX } from '../entries.js';
 import { store, commit, save } from '../store.js';
 import { esc, toast, download, copyText, hash, safeURL, charLen, today } from '../util.js';
@@ -202,6 +204,18 @@ function repliesGuide() {
       <div class="rp"><span class="label">回應內容</span><p class="pre">${esc(r.reply)}</p><button type="button" class="btn ghost sm" data-action="copy-reply" data-i="${i}">複製</button></div></li>`).join('')}</ul>`;
 }
 
+// ---------- 品牌規範（給任何 AI 使用） ----------
+function guideCard(D) {
+  const miss = missingItems(S(), D);
+  return `<section class="card guide-card" aria-labelledby="gTitle">
+    <div class="g-top"><div><h2 id="gTitle">${icon('doc', 'ic sm')} 我的品牌規範（給任何 AI 使用）</h2>
+      <p class="hint">把你的品牌核心、關鍵字、語氣、色票、字型、圖像風格整理成一份規範。複製後貼到 Claude、ChatGPT、Gemini，之後請 AI 做任何東西都會照這份規範。</p></div>
+      <div class="row"><button type="button" class="btn primary" data-action="guide-copy">${icon('doc', 'ic sm')} 複製品牌規範提示詞</button><button type="button" class="btn ghost" data-action="guide-dl">下載 brand.md</button></div></div>
+    ${miss.length ? `<p class="parse"><span>還有 ${miss.length} 項待補：${miss.map(esc).join('、')}。可以回第一步補上，或直接貼給 AI，AI 會一題一題問你。</span></p>` : '<p class="parse"><span class="ok">品牌規範已完整。</span></p>'}
+    <details><summary>看規範內容</summary><pre class="md-preview">${esc(brandMd(S(), D))}</pre></details>
+  </section>`;
+}
+
 // ---------- 主畫面 ----------
 export function render(root, [pidArg, tabArg]) {
   const fallback = isReady(S().meta.target) ? S().meta.target : PLATFORMS.find((p) => isReady(p.id)).id;
@@ -213,6 +227,7 @@ export function render(root, [pidArg, tabArg]) {
   root.innerHTML = `
   <div class="page-head"><p class="eyebrow">第三步</p><h1 tabindex="-1">連接並完成</h1>
   <p class="lead">照「預覽 → 修改 → 下載 → 提示詞 → 設定引導」的順序完成。標示「建置中」的平台，完成後會陸續開放。</p></div>
+  ${guideCard(D)}
   ${overview(pid)}
   <nav class="ptabs" aria-label="平台">${PLATFORMS.map((x) => (isReady(x.id) ? `<a href="#/results/${x.id}/${tab}" aria-current="${x.id === pid ? 'page' : 'false'}">${icon(x.icon, 'ic sm')}${esc(x.name)}</a>` : `<span class="is-building" aria-disabled="true" title="建置中">${icon(x.icon, 'ic sm')}${esc(x.name)}<small>建置中</small></span>`)).join('')}</nav>
   <section class="panel" aria-labelledby="pTitle">
@@ -244,6 +259,8 @@ export async function onAction(act, el) {
     case 'entries-keep': s.answers.services = L.entries.slice(0, 8).map((e) => e.label).filter(Boolean); commit(); return true;
     case 'reset-text': delete s.platforms[el.dataset.p].overrides[el.dataset.k]; commit(); toast('已恢復自動產生'); return true;
     case 'web-width': setWebWidth(+el.dataset.v); return true;
+    case 'guide-copy': copyText(guidePrompt(s, derive(s))); return true;
+    case 'guide-dl': download('brand.md', brandMd(s, derive(s)), 'text/markdown;charset=utf-8'); toast('已下載 brand.md'); return true;
     case 'entry-type': {
       const e = L.entries[+el.dataset.i];
       e.type = el.dataset.v;
@@ -270,7 +287,7 @@ export async function onAction(act, el) {
       return true;
     }
     case 'goto-q':
-      s.meta.qIndex = Math.max(0, ['traits', 'audience', 'expertise', 'services', 'tone', 'style', 'palette', 'photo', 'avoid', 'naming', 'name', 'display', 'contact'].indexOf(el.dataset.q));
+      s.meta.qIndex = qIndexOf(el.dataset.q);
       save();
       return false;
     case 'dl-asset': {

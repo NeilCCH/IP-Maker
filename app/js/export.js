@@ -10,6 +10,7 @@ import { makeZip } from './zip.js';
 import { canvasToBlob } from './util.js';
 import { replyValue, formScript, formManual, formEntries, TYPE_NAME } from './entries.js';
 import { exportJSON } from './model.js';
+import { brandMd, guidePrompt } from './brandguide.js';
 
 export const RICHMENU_MAX_BYTES = 1024 * 1024;
 
@@ -102,6 +103,7 @@ export async function platformFiles(state, pid, designId = state.selectedDesignI
   files.push({ name: '文案.txt', data: textsTxt(state, D, pid) });
   files.push({ name: '提示詞.txt', data: state.platforms[pid].prompt.draft || buildPrompt(state, D, pid, state.platforms[pid].prompt.extra) });
   files.push({ name: '設定引導.txt', data: guideTxt(state, pid) });
+  files.push({ name: 'brand.md', data: brandMd(state, D) });
   if (pid === 'lineOA') {
     const L = state.platforms.lineOA;
     for (let p = 0; p < L.pages; p++) files.push({ name: `richmenu-page-${p + 1}.json`, data: JSON.stringify(richMenuBody(L, p, D.titleName), null, 2) });
@@ -127,6 +129,7 @@ export async function allZip(state) {
   const files = [];
   for (const P of PLATFORMS) if (isReady(P.id)) files.push(...(await platformFiles(state, P.id)));
   files.push({ name: '品牌進度備份.json', data: exportJSON(state) });
+  { const D = derive(state); files.push({ name: 'brand.md', data: brandMd(state, D) }, { name: '品牌規範提示詞.txt', data: guidePrompt(state, D) }); }
   files.push({ name: '讀我.txt', data: '這是你的個人品牌素材包。\n每個資料夾對應一個平台，裡面有圖片、文案、提示詞與設定引導。\n「品牌進度備份.json」可以在 APP 的「進階工具 → 匯入進度」還原。\n含有【待填】的地方，請換成你的真實資料再使用。' });
   return makeZip(files);
 }

@@ -7,6 +7,7 @@ import { store, commit, save } from '../store.js';
 import { esc, toast } from '../util.js';
 import { icon } from './common.js';
 import { PLATFORM_BY_ID } from '../platforms.js';
+import { qIndexOf } from '../data/questions.js';
 
 const S = () => store.state;
 
@@ -67,7 +68,7 @@ export function onAction(act, el) {
     return true;
   }
   if (act === 'goto-q') {
-    S().meta.qIndex = Math.max(0, ['traits', 'audience', 'expertise', 'services', 'tone', 'style', 'palette', 'photo', 'avoid', 'naming', 'name', 'display', 'contact'].indexOf(el.dataset.q));
+    S().meta.qIndex = qIndexOf(el.dataset.q);
     save();
     return false; // 讓連結照常跳轉
   }
