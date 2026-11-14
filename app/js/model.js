@@ -38,7 +38,8 @@ export function fresh() {
     designNotes: '',
     platforms: Object.fromEntries(PLATFORM_IDS.map((id) => [id, freshPlatform()])),
   };
-  Object.assign(s.platforms.lineOA, { pages: 1, count: 8, activePage: 0, pageNames: ['我的服務', '更多資源'], entries: [], entriesCustom: false });
+  Object.assign(s.platforms.lineOA, { pages: 1, count: 6, // 預設單頁 6 格：LINE 後台可自行設定的版型
+    activePage: 0, pageNames: ['我的服務', '更多資源'], entries: [], entriesCustom: false });
   s.platforms.website.publishedUrl = '';
   s.platforms.lineOA.oaUrl = '';
   s.platforms.lineOA.forms = { form: '', edit: '', sheet: '' };
@@ -280,6 +281,7 @@ export function sampleHengYuan() {
   n.selectedDesignId = 'tech';
   n.meta.started = true;
   syncEntries(n);
+  n.platforms.lineOA.count = 8; // 範例使用 8 格
   n.platforms.lineOA.entries[0].label = '認識衡遠';
   n.platforms.lineOA.entriesCustom = true;
   return n;

@@ -42,6 +42,10 @@ node tests/worker.test.js
 ```
 需要 Node 22、Playwright（Chromium）、Python 3 與 Pillow。
 
+## 產品決定（2026-11）
+- LINE 官方帳號採「**系統備料、本人自己設定**」。代設功能（`worker/line.js`）程式保留，但正式站**不設定 `TOKEN_KEY`**，因此停用且介面不顯示。除非擁有者明確要求，不要啟用。
+- 新使用者的圖文選單預設為**單頁 6 格**（LINE 後台可自行設定的版型）；8 格與雙頁仍可選，但需要 Messaging API。
+
 ## 審計紀錄
 - `docs/audit/codex-audit.md`：2026-11-14 Codex 獨立審計（F01–F09）。九項皆已修正並補上回歸測試，見 `tests/e2e.test.js` 的「審計修正」區段。
 

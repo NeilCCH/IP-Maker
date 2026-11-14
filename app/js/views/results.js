@@ -164,9 +164,7 @@ let lineError = '';
 function lineConnectCard() {
   const s = lineState;
   const head = `<h3>${icon('link', 'ic sm')} 讓系統代設（選用）</h3>`;
-  if (lineError) return `${head}<p class="hint">${esc(lineError)}</p><p class="hint">不使用代設也沒關係，照下面的步驟一樣可以自己完成設定。</p>`;
-  if (!s) return `${head}<p class="hint">檢查中…</p>`;
-  if (!s.enabled) return `${head}<p>代設功能尚未啟用。請管理者到 Cloudflare 後台設定加密金鑰（TOKEN_KEY）後即可使用。</p><p class="hint">在這之前，照下面的步驟一樣可以自己完成設定。</p>`;
+  if (lineError || !s || !s.enabled) return ''; // 代設未啟用：不顯示，維持「系統備料、本人自己設定」
   if (!s.connected)
     return `${head}
     <p>授權一次，之後選單上架、歡迎訊息、每一格的回覆都由系統處理。你之後在 APP 修改內容，按「套用」就會更新，不用再進 LINE 後台。</p>
@@ -203,7 +201,7 @@ async function loadLineStatus() {
   if (!box) return;
   try { lineState = await lineStatus(); lineError = ''; } catch (e) { lineState = null; lineError = e.message; }
   const again = document.getElementById('lineConnect');
-  if (again) again.innerHTML = lineConnectCard();
+  if (again) { again.innerHTML = lineConnectCard(); again.hidden = !again.innerHTML; }
 }
 
 function guideTab(pid) {
@@ -211,7 +209,7 @@ function guideTab(pid) {
   const pl = S().platforms[pid];
   const st = statusOf(pid, S());
   const urlField = P.test.urlField;
-  return `${pid === 'lineOA' ? `<div class="card connect-card" id="lineConnect">${lineConnectCard()}</div>` : ''}<div class="card"><h3>完成狀態</h3><ul class="status-list">${st.map((x) => `<li>${badge(x.status, x.text)}<span>${esc(x.label)}</span></li>`).join('')}</ul>
+  return `${pid === 'lineOA' ? `<div class="card connect-card" id="lineConnect" ${lineConnectCard() ? '' : 'hidden'}>${lineConnectCard()}</div>` : ''}<div class="card"><h3>完成狀態</h3><ul class="status-list">${st.map((x) => `<li>${badge(x.status, x.text)}<span>${esc(x.label)}</span></li>`).join('')}</ul>
     <p class="hint">「已完成」只代表系統產出素材或你自己確認；APP 不會替你登入、發文或宣稱已串接。</p></div>
     <ol class="guide">${P.guide.map((g, i) => `<li class="card"><div class="g-head"><span class="step-no">${i + 1}</span><h3>${esc(g.title)}</h3></div>
       ${g.dynamic === 'forms' ? formsGuide() : g.dynamic === 'replies' ? repliesGuide() : `<p class="pre">${esc(g.body || guideDynamic(S(), g))}</p>`}
@@ -423,7 +421,7 @@ async function busyText(btn, text, fn) {
   btn.textContent = text;
   try { await fn(); lineError = ''; } catch (e) { toast(e.message); }
   const box = document.getElementById('lineConnect');
-  if (box) box.innerHTML = lineConnectCard();
+  if (box) { box.innerHTML = lineConnectCard(); box.hidden = !box.innerHTML; }
   else { btn.disabled = false; btn.innerHTML = label; }
 }
 
