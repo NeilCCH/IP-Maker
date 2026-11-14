@@ -13,7 +13,7 @@ export const ENTRY_TYPES = [
 export const TYPE_NAME = Object.fromEntries(ENTRY_TYPES.map((t) => [t.id, t.name]));
 
 export const LINE_REPLY_MAX = 500; // 後台自動回應文字建議上限（實作時以後台提示為準）
-export const LINE_URI_MAX = 1000; // Messaging API uri action 上限
+export const LINE_URI_MAX = 1000; // APP 採用的保守上限（LINE 官方上限較高）
 
 export function defaultType(label) {
   if (/預約|需求填寫|保單健檢|需求表/.test(label)) return 'form';
@@ -85,7 +85,7 @@ export function formScript(state, D) {
   const choices = formChoices(state);
   const entries = formEntries(line).map((e) => e.label);
   return `/**
- * 品牌工作室：建立「${brand}｜需求表」
+ * 品牌工作室：建立需求表（表單名稱見下方程式內的設定）
  * 會在「你自己的」Google 帳號建立一份 Google 表單和一份回覆試算表，不會傳資料給任何第三方。
  * 用法：到 script.google.com →「新專案」→ 刪掉原本內容、貼上全部 → 按上方「執行」。
  * 第一次執行會要求授權：這是你自己的程式，Google 會提醒「尚未驗證」，

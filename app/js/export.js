@@ -4,7 +4,7 @@ import { loadImage } from './draw.js';
 import { PLATFORMS, PLATFORM_BY_ID, assetsFor, statusOf, isReady } from './platforms.js';
 import { TEXT_FIELDS, textValue } from './copy.js';
 import { buildPrompt } from './prompt.js';
-import { richMenuBody, richMenuConfig, apiScript } from './line.js';
+import { richMenuBody, richMenuConfig, apiScript, releaseId } from './line.js';
 import { websiteHTML } from './website.js';
 import { makeZip } from './zip.js';
 import { canvasToBlob } from './util.js';
@@ -40,6 +40,7 @@ export async function assetBlob(asset, D, forceJpeg = false) {
       ext = 'jpg';
       if (blob.size <= RICHMENU_MAX_BYTES) break;
     }
+    if (blob.size > RICHMENU_MAX_BYTES) throw new Error('圖文選單圖片超過 LINE 的 1MB 上限，請換一張較小的照片或改用不放照片');
   }
   return { blob, ext };
 }
@@ -106,9 +107,10 @@ export async function platformFiles(state, pid, designId = state.selectedDesignI
   files.push({ name: 'brand.md', data: brandMd(state, D) });
   if (pid === 'lineOA') {
     const L = state.platforms.lineOA;
-    for (let p = 0; p < L.pages; p++) files.push({ name: `richmenu-page-${p + 1}.json`, data: JSON.stringify(richMenuBody(L, p, D.titleName), null, 2) });
-    files.push({ name: 'line-richmenu-config.json', data: JSON.stringify(richMenuConfig(L, D.titleName), null, 2) });
-    files.push({ name: 'upload-richmenu.sh', data: apiScript(L, useJpg ? 'jpg' : 'png') });
+    const rel = releaseId(); // 同一包素材的設定檔與指令共用同一組切頁代號
+    for (let p = 0; p < L.pages; p++) files.push({ name: `richmenu-page-${p + 1}.json`, data: JSON.stringify(richMenuBody(L, p, D.titleName, rel), null, 2) });
+    files.push({ name: 'line-richmenu-config.json', data: JSON.stringify(richMenuConfig(L, D.titleName, rel), null, 2) });
+    files.push({ name: 'upload-richmenu.sh', data: apiScript(L, useJpg ? 'jpg' : 'png', rel) });
     files.push({ name: '歡迎訊息.txt', data: textValue(state, D, 'lineOA', 'greeting') });
     files.push({ name: '自動回應清單.txt', data: replyList(state, D).map((r) => `【關鍵字】${r.keyword}（${TYPE_NAME[r.type]}）\n${r.reply}\n`).join('\n') });
     if (formEntries(L).length) {

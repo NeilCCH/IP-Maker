@@ -133,6 +133,18 @@ if ('serviceWorker' in navigator && location.protocol !== 'file:') {
 
 window.addEventListener('offline', () => toast('目前離線：仍可繼續編輯，資料會存在這台裝置'));
 
+// 恢復連線、回到前景時重新檢查登入與審核狀態（被停用或登出時，checkAccess 會清除快取並回到申請頁）
+let recheckBusy = false;
+let lastRecheck = 0;
+async function recheckAccess() {
+  if (recheckBusy || !navigator.onLine || Date.now() - lastRecheck < 30000) return;
+  recheckBusy = true;
+  lastRecheck = Date.now();
+  try { await checkAccess(); } finally { recheckBusy = false; }
+}
+window.addEventListener('online', () => { lastRecheck = 0; recheckAccess(); });
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') recheckAccess(); });
+
 render();
 save();
 

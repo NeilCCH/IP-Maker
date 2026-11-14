@@ -428,7 +428,7 @@ export function clickMap(ctx, W, H, D, line, p) {
   };
   L.tabs.forEach((t) => draw(t.x, t.y, t.w, t.h, '頁', `切換到：${t.name}`, '', '#fbbf24'));
   L.cells.forEach((c, i) => {
-    const url = /^https?:\/\//.test(c.entry.url || '');
+    const url = /^https:\/\//.test(c.entry.url || '');
     draw(c.x, c.y, c.w, c.h, String(i + 1), c.entry.label || '待命名', url ? `連結：${c.entry.url}` : `送出文字「${c.entry.label}」（待設定自動回應）`, url ? '#22d3ee' : '#f472b6');
   });
 }

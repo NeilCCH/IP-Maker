@@ -15,10 +15,10 @@
   - `js/website.js` 個人網頁產生器；`js/brandguide.js` 品牌規範與 AI 提示詞
   - `js/views/` 各畫面；`sw.js` 離線快取；`gate/` 登入與申請頁（公開）
 - `worker/`：後台。Google 登入驗證、使用申請、管理者審核、門禁。資料存在 Durable Object（SQLite）。
-- `tests/`：`e2e.test.js`（前端 31 項）、`worker.test.js`（後台 20 項）、`check_zip.py`
+- `tests/`：`e2e.test.js`（前端 41 項）、`worker.test.js`（後台 20 項）、`check_zip.py`
 
 ## 一定要遵守的規則
-1. **不要直接推送到 `claude/sleepy-fermi-ibeizt`**（那是正式站）。請開自己的分支，完成後開 Pull Request。
+1. **不要直接推送到 `claude/sleepy-fermi-ibeizt`**（那是正式站）。請開自己的分支，完成後開 Pull Request。（專案主要的 Claude Code 工作階段由擁有者指定在此分支開發，不在此限。）
 2. 介面與文件使用**台灣繁體中文**。使用者不是工程師，文字要白話。
 3. **不虛構**：不替使用者編造經歷、證照、案例、數據；沒有資料時用【待填】。不顯示未完成的功能為已完成。
 4. **所有問卷題目都要能一個人完成**，不可要求找別人協助。
@@ -41,9 +41,12 @@ node tests/worker.test.js
 ```
 需要 Node 22、Playwright（Chromium）、Python 3 與 Pillow。
 
+## 審計紀錄
+- `docs/audit/codex-audit.md`：2026-11-14 Codex 獨立審計（F01–F09）。九項皆已修正並補上回歸測試，見 `tests/e2e.test.js` 的「審計修正」區段。
+
 ## 已知限制（不是待修的錯誤，但歡迎提出改進建議）
 - 問卷資料只存在使用者裝置（localStorage），不跨裝置同步。
 - 門禁擋的是「下載 APP」；已經快取過 APP 的裝置，離線時仍可開啟本機的 APP（APP 每次上線會重新檢查登入狀態）。
-- LINE 八格／雙頁選單的 `upload-richmenu.sh` 尚未在真實官方帳號驗證。
+- LINE 八格／雙頁選單的 `upload-richmenu.sh` 已通過本機模擬測試（含失敗清除），尚未在真實官方帳號驗證。
 - 素材是規則式版型，不是 AI 生圖；圖片字型依裝置而定。
 - 尚未在真實 iOS／Android 完成安裝、離線、更新的完整驗證。

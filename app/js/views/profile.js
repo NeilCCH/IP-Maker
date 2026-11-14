@@ -87,9 +87,9 @@ function photoBlock(q) {
   const s = S();
   return `${optionButtons(q)}
   <div class="photo-row">
-    ${s.photo ? `<img class="photo-thumb" src="${s.photo}" alt="已上傳的照片">` : `<div class="photo-thumb empty">${icon('person')}</div>`}
+    ${s.photo ? `<img class="photo-thumb" src="${esc(s.photo)}" alt="已上傳的照片">` : `<div class="photo-thumb empty">${icon('person')}</div>`}
     <div class="grow">
-      <label class="btn"><input id="photoFile" type="file" accept="image/png,image/jpeg,image/webp" hidden>${s.photo ? '換一張照片' : '上傳照片'}</label>
+      <label class="btn file-btn"><input id="photoFile" class="sr-only" type="file" accept="image/png,image/jpeg,image/webp" aria-label="上傳照片">${s.photo ? '換一張照片' : '上傳照片'}</label>
       ${s.photo ? '<button type="button" class="btn ghost" data-action="photo-remove">移除照片</button>' : ''}
       <p class="hint">建議正面、光線清楚的半身照。會自動縮小，只存在這台裝置。</p>
     </div>
@@ -163,7 +163,7 @@ function parseBlock(qid) {
 
 export function render(root) {
   const s = S();
-  const i = s.meta.qIndex;
+  const i = Number.isInteger(s.meta.qIndex) && QUESTIONS[s.meta.qIndex] ? s.meta.qIndex : (s.meta.qIndex = 0);
   const q = QUESTIONS[i];
   const body =
     q.type === 'palette' ? paletteBlock()

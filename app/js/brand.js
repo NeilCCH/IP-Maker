@@ -117,8 +117,8 @@ export function detectConflicts(state) {
   }
   if (state.answers.font?.[0] === '明體・典雅' && avoidInfo(state).flags.has('serif'))
     out.push({ id: 'font-serif', qid: 'font', message: '你選了「明體・典雅」，但避免事項有「古典襯線字體」。', optionLabel: '使用明體', textLabel: '改用現代黑體' });
-  if (state.answers.palette[0] === 'custom' && state.customColors?.primary && contrast(state.customColors.primary, '#ffffff') < 3)
-    out.push({ id: 'custom-contrast', qid: 'palette', message: '你的主色太淺，放在白底上的文字可能看不清楚。', optionLabel: '仍使用這個主色', textLabel: '自動加深主色' });
+  if (state.answers.palette[0] === 'custom' && state.customColors?.primary && contrast(state.customColors.primary, '#ffffff') < 4.5)
+    out.push({ id: 'custom-contrast', qid: 'palette', message: '你的主色偏淺，按鈕上的白色文字可能看不清楚（對比低於 4.5:1）。', optionLabel: '仍使用這個主色', textLabel: '自動加深主色' });
   const photoOpt = state.answers.photo[0];
   if (/不(要|放|想|露)[^，。]{0,4}(照片|臉|本人)|不露臉/.test(state.freeform.photo || '') && ['醒目呈現', '適度呈現'].includes(photoOpt))
     out.push({ id: 'photo-none', qid: 'photo', message: `你選了「${photoOpt}」，但文字寫到不想放照片。`, optionLabel: `照片${photoOpt}`, textLabel: '不放照片' });

@@ -99,7 +99,7 @@ export const TEXT_FIELDS = {
   website: [
     { key: 'heroTitle', label: '首頁大標', max: 30, gen: (D) => D.titleName },
     { key: 'heroText', label: '首頁副標', max: 80, gen: (D) => `${D.positioning}。陪${who(D)}把規劃想清楚。` },
-    { key: 'about', label: '關於我', max: 1200, gen: (D) => [`我是${D.personName || PH('姓名')}${D.jobTitle ? `，${D.jobTitle}` : ''}。`, D.whoami ? `${D.whoami}。` : '', `主要服務${who(D)}，專注${exp(D)}。`, D.traits.length ? `客戶常說我${D.traits.join('、')}。` : '', PH('年資、證照、服務經歷——請只填真實資料')].filter(Boolean).join('\n') },
+    { key: 'about', label: '關於我', max: 1200, gen: (D) => [`我是${D.personName || PH('姓名')}${D.jobTitle ? `，${D.jobTitle}` : ''}。`, D.whoami ? `${D.whoami}。` : '', `主要服務${who(D)}，專注${exp(D)}。`, D.traits.length ? `我希望帶給客戶的感受：${D.traits.join('、')}。` : '', PH('年資、證照、服務經歷——請只填真實資料')].filter(Boolean).join('\n') },
     { key: 'steps', label: '合作方式（一行一個步驟，最多 4 步）', max: 300, gen: () => ['先聊聊你的現況與在意的事，不需要先準備資料。', '我把重點整理清楚，用白話說明可以怎麼安排。', '你決定下一步；不適合的，我會直接告訴你。'].join('\n') },
     { key: 'cta', label: '行動呼籲區說明', max: 200, gen: (D) => (D.toneFamily === '簡短俐落' ? '有需要，直接聯繫我。' : '想聊聊你的規劃？選一個方便的方式聯繫我，我會親自回覆。') },
   ],

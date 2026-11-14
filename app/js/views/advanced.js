@@ -22,7 +22,7 @@ export function render(root) {
     <section class="card"><h2>${icon('shield', 'ic sm')} 進度備份</h2>
       <p>資料只存在這台裝置的瀏覽器。換手機、清除瀏覽器資料前，請先匯出備份。</p>
       <div class="row"><button type="button" class="btn primary" data-action="export-json">匯出進度（JSON）</button>
-      <label class="btn ghost"><input type="file" id="importFile" accept="application/json,.json" hidden>匯入進度</label></div>
+      <label class="btn ghost file-btn"><input type="file" id="importFile" class="sr-only" accept="application/json,.json" aria-label="匯入進度檔">匯入進度</label></div>
       <p class="hint">可匯入：本 APP 的進度檔（版本 ${SCHEMA_VERSION}）、舊版展示版的「品牌設計進度.json」、舊版「共用品牌資料.json」。檔案有誤時不會動到目前進度。</p></section>
     <section class="card"><h2>${icon('doc', 'ic sm')} 全部素材包</h2>
       <p>已開放平台的圖片、文案、提示詞與設定引導，加上進度備份，一次打包成 ZIP。</p>

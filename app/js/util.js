@@ -14,7 +14,7 @@ export function safeURL(u) {
   if (!u) return null;
   try {
     const v = new URL(String(u).trim());
-    return ['https:', 'http:'].includes(v.protocol) ? v.href : null;
+    return v.protocol === 'https:' ? v.href : null; // 與介面說明一致：只接受 https
   } catch {
     return null;
   }

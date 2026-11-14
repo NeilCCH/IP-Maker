@@ -436,6 +436,143 @@ const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'brand-e2e-'));
     await c2.close();
   });
 
+  console.log('審計修正（Codex 審計 F01–F09）');
+  await test('F01 舊版進度檔的照片欄位夾帶程式會被拒絕；HTML 不含注入的屬性', async () => {
+    const r = await page.evaluate(async ([m, w, b]) => {
+      const M = await import(m); const W = await import(w); const B = await import(b);
+      const evil = 'data:image/png;base64,AA" onerror="window.__auditPhoto=1';
+      const legacy = M.migrate({ answers: { photo: ['醒目呈現'] }, entries: [], photo: evil });
+      const kit = M.migrate({ schemaVersion: 1, identity: { name: 'x' }, visual: { photo: evil } });
+      const ok = M.migrate({ answers: {}, entries: [], photo: 'data:image/png;base64,iVBORw0KGgo=' });
+      const st = M.fresh(); st.photo = evil; st.answers.photo = ['醒目呈現']; // 就算資料繞過檢查，輸出也要跳脫
+      return { legacy: legacy.photo, kit: kit.photo, ok: ok.photo, html: W.websiteHTML(st, B.derive(st)) };
+    }, [mod('model.js'), mod('website.js'), mod('brand.js')]);
+    assert(r.legacy === '' && r.kit === '', '惡意照片沒有被拒絕');
+    assert(r.ok.startsWith('data:image/png;base64,'), '正常照片被誤拒');
+    assert(!/" onerror="/.test(r.html), '網頁輸出含未跳脫的屬性');
+    const f = path.join(TMP, 'evil-legacy.json');
+    fs.writeFileSync(f, JSON.stringify({ answers: { photo: ['醒目呈現'] }, entries: [], photo: 'data:image/png;base64,AA" onerror="window.__auditPhoto=1' }));
+    await go('#/advanced');
+    await page.setInputFiles('#importFile', f);
+    await page.waitForTimeout(300);
+    await page.evaluate((i) => { const st = JSON.parse(localStorage.getItem('brand-studio-v2')); st.meta.qIndex = i; localStorage.setItem('brand-studio-v2', JSON.stringify(st)); }, QI.photo);
+    await go('#/profile');
+    assert(!(await page.evaluate(() => window.__auditPhoto)), '匯入後照片題執行了注入的程式');
+  });
+
+  await test('F02 品牌名稱無法跳出 Google 表單程式的註解', async () => {
+    const ran = await page.evaluate(async ([m, e, b]) => {
+      const M = await import(m); const E = await import(e); const B = await import(b);
+      const out = [];
+      for (const name of ['*/globalThis.__auditGS=1;/*', '");globalThis.__auditGS=1;//', 'a\n*/globalThis.__auditGS=1;/*']) {
+        const st = M.fresh(); st.identity.brandName = name.slice(0, 30); st.identity.personName = name.slice(0, 30);
+        globalThis.__auditGS = 0;
+        new Function(E.formScript(st, B.derive(st)))(); // 只定義函式，不呼叫 createBrandForm
+        out.push(globalThis.__auditGS);
+      }
+      return out;
+    }, [mod('model.js'), mod('entries.js'), mod('brand.js')]);
+    assert(ran.every((v) => v === 0), `產出的程式在頂層執行了注入內容：${ran}`);
+  });
+
+  await test('F03 恢復連線時重新檢查權限，被停用就回到申請頁', async () => {
+    const c3 = await browser.newContext();
+    const p3 = await c3.newPage();
+    let status = 'approved';
+    let calls = 0;
+    await p3.route('**/api/me', (r) => { calls++; r.fulfill({ contentType: 'application/json', body: JSON.stringify(status === 'approved' ? { email: 'a@x.com', status, isAdmin: false, profile: { name: '測試' } } : { status }) }); });
+    await p3.route('**/api/config', (r) => r.fulfill({ contentType: 'application/json', body: JSON.stringify({ authEnabled: true, googleClientId: 'x' }) }));
+    await p3.route('https://accounts.google.com/**', (r) => r.fulfill({ contentType: 'text/javascript', body: '' }));
+    await p3.goto(BASE);
+    await p3.waitForSelector('#userChip:not([hidden])');
+    const before = calls;
+    status = 'anonymous';
+    await p3.evaluate(() => window.dispatchEvent(new Event('online')));
+    await p3.waitForURL('**/gate/');
+    assert(calls > before, '恢復連線後沒有重新檢查');
+    await c3.close();
+  });
+
+  await test('F04 舊版共用品牌資料遷移保留照片、照片偏好與風格', async () => {
+    const r = await page.evaluate(async (m) => (await import(m)).migrate({ schemaVersion: 1, identity: { name: '舊牌' }, visual: { photo: 'data:image/png;base64,iVBORw0KGgo=', photoPreference: ['不放照片'], style: ['親切自然'] } }), mod('model.js'));
+    assert(r.photo.startsWith('data:image/png') && r.answers.photo[0] === '不放照片' && r.answers.style[0] === '親切自然', JSON.stringify([r.photo.slice(0, 20), r.answers.photo, r.answers.style]));
+  });
+
+  await test('F05 LINE 上傳指令：第二頁失敗時不動原選單並清除半成品；成功時最後才切換', async () => {
+    const script = await page.evaluate(async (l) => { const L = await import(l); const line = { pages: 2, count: 8, pageNames: ['一', '二'], entries: Array.from({ length: 16 }, (_, i) => ({ label: `入口${i + 1}`, type: 'reply', url: '' })) }; return { sh: L.apiScript(line, 'png', 'abc123'), alias: [L.aliasId(0, 'abc123'), L.aliasId(1, 'abc123')], body: JSON.stringify(L.richMenuBody(line, 0, 'x', 'abc123')) }; }, mod('line.js'));
+    assert(script.alias[0] === 'bs-abc123-p1' && script.body.includes('bs-abc123-p2') && !script.sh.includes('brand-page-'), '切頁代號不是每次發佈獨立');
+    const run = (failOn) => {
+      const dir = fs.mkdtempSync(path.join(TMP, 'line-'));
+      fs.mkdirSync(path.join(dir, 'bin'));
+      fs.writeFileSync(path.join(dir, 'bin', 'curl'), `#!/usr/bin/env bash
+echo "$*" >> "${dir}/calls.log"
+url=""; method=GET; prev=""
+for a in "$@"; do case "$a" in http*) url="$a";; esac; if [ "$prev" = "-X" ]; then method="$a"; fi; prev="$a"; done
+case "$url" in
+  */content) n=$(grep -c '/content' "${dir}/calls.log"); if [ "${failOn}" = "content$n" ]; then exit 22; fi;;
+  */richmenu) if [ "$method" = "POST" ]; then n=$(grep -c ' https://api.line.me/v2/bot/richmenu ' "${dir}/calls.log" || true); n=$(grep -cE 'bot/richmenu( |$)' "${dir}/calls.log"); echo "{ \\"richMenuId\\" : \\"richmenu-new$n\\" }"; fi;;
+  */user/all/richmenu) if [ "$method" = "GET" ]; then echo '{"richMenuId":"richmenu-old"}'; fi;;
+esac
+exit 0
+`, { mode: 0o755 });
+      fs.writeFileSync(path.join(dir, 'upload-richmenu.sh'), script.sh);
+      for (const n of [1, 2]) { fs.writeFileSync(path.join(dir, `richmenu-page-${n}.json`), '{}'); fs.writeFileSync(path.join(dir, `richmenu-page-${n}.png`), 'x'); }
+      let code = 0;
+      try { execFileSync('bash', [path.join(dir, 'upload-richmenu.sh')], { env: { ...process.env, PATH: `${path.join(dir, 'bin')}:${process.env.PATH}`, LINE_CHANNEL_ACCESS_TOKEN: 'test-token' }, stdio: 'pipe' }); } catch (e) { code = e.status; }
+      return { code, log: fs.readFileSync(path.join(dir, 'calls.log'), 'utf8').split('\n').filter(Boolean) };
+    };
+    { const f = path.join(TMP, 'syntax-check.sh'); fs.writeFileSync(f, script.sh); execFileSync('bash', ['-n', f]); } // 語法檢查
+    const bad = run('content2');
+    assert(bad.code !== 0, '第二頁失敗時指令沒有中止');
+    assert(!bad.log.some((l) => /-X POST .*user\/all\/richmenu\//.test(l)), '失敗時仍切換了預設選單');
+    assert(!bad.log.some((l) => /richmenu\/alias/.test(l) && /POST/.test(l)), '失敗前就建立了切頁代號');
+    assert(bad.log.filter((l) => /-X DELETE .*bot\/richmenu\/richmenu-new/.test(l)).length === 2, `沒有清除兩個半成品選單：${bad.log.filter((l) => /DELETE/.test(l))}`);
+    const good = run('none');
+    assert(good.code === 0, '成功情境指令失敗');
+    const iDefault = good.log.findIndex((l) => /-X POST .*user\/all\/richmenu\/richmenu-new1/.test(l));
+    const iAlias = good.log.reduce((m, l, i) => (/richmenu\/alias/.test(l) ? i : m), -1);
+    assert(iDefault === good.log.length - 1 && iAlias >= 0 && iAlias < iDefault, '切換預設選單不是最後一步');
+    assert(!good.log.some((l) => /DELETE/.test(l)), '成功時不應刪除選單');
+  });
+
+  await test('F06 個人網頁不把自選關鍵字寫成客戶評價', async () => {
+    const t = await page.evaluate(async ([m, c, b]) => { const M = await import(m); const C = await import(c); const B = await import(b); const st = M.fresh(); st.answers.keywords = ['沉穩']; return C.textValue(st, B.derive(st), 'website', 'about'); }, [mod('model.js'), mod('copy.js'), mod('brand.js')]);
+    assert(!/客戶常說|客戶都說|客戶評價/.test(t) && t.includes('沉穩'), t);
+  });
+
+  await test('F07 匯入進度與上傳照片可用鍵盤操作', async () => {
+    await go('#/advanced');
+    const a = await page.$eval('#importFile', (el) => ({ hidden: el.hidden, display: getComputedStyle(el).display, tab: el.tabIndex, label: el.getAttribute('aria-label') }));
+    assert(!a.hidden && a.display !== 'none' && a.tab >= 0 && a.label, JSON.stringify(a));
+    await page.focus('#importFile');
+    assert(await page.evaluate(() => document.activeElement.id === 'importFile'), '匯入進度無法取得鍵盤焦點');
+    const [chooser] = await Promise.all([page.waitForEvent('filechooser'), page.keyboard.press('Enter')]);
+    assert(chooser, '按 Enter 沒有開啟選擇檔案');
+    await page.evaluate((i) => { const st = JSON.parse(localStorage.getItem('brand-studio-v2')); st.meta.qIndex = i; localStorage.setItem('brand-studio-v2', JSON.stringify(st)); }, QI.photo);
+    await go('#/profile');
+    const b = await page.$eval('#photoFile', (el) => ({ hidden: el.hidden, display: getComputedStyle(el).display, tab: el.tabIndex }));
+    assert(!b.hidden && b.display !== 'none' && b.tab >= 0, JSON.stringify(b));
+  });
+
+  await test('F08 匯入的題號不是整數時自動修正，問卷不會壞掉', async () => {
+    const r = await page.evaluate(async (m) => { const M = await import(m); return [0.5, -3, 999, 'abc', null, 2.9].map((v) => { const st = M.fresh(); st.meta.qIndex = v; return M.sanitize(st).meta.qIndex; }); }, mod('model.js'));
+    assert(r.every((v) => Number.isInteger(v) && v >= 0), `題號未修正：${r}`);
+    const st = await state(); st.meta.qIndex = 0.5; await setState(st);
+    const before = errors.length;
+    await go('#/profile');
+    assert(await page.isVisible('#qTitle') && errors.length === before, '題號異常時問卷畫面中斷');
+  });
+
+  await test('F09 自訂主色對比低於 4.5:1 會提醒', async () => {
+    const r = await page.evaluate(async ([m, b]) => { const M = await import(m); const B = await import(b); const mk = (c) => { const st = M.fresh(); st.answers.palette = ['custom']; st.customColors.primary = c; return B.detectConflicts(st).some((x) => x.id === 'custom-contrast'); }; return { gray: mk('#888888'), dark: mk('#1e3a8a') }; }, [mod('model.js'), mod('brand.js')]);
+    assert(r.gray === true && r.dark === false, JSON.stringify(r));
+  });
+
+  await test('網址只接受 https；不接受 http、javascript、data', async () => {
+    const r = await page.evaluate(async (u) => { const U = await import(u); return ['https://a.com/x', 'http://a.com', 'javascript:alert(1)', 'data:text/html,x', ' JaVaScRiPt:alert(1)', 'line://x'].map((x) => !!U.safeURL(x)); }, mod('util.js'));
+    assert(JSON.stringify(r) === JSON.stringify([true, false, false, false, false, false]), JSON.stringify(r));
+  });
+
   console.log('產出與安裝');
   const zips = {};
   await test('五平台素材包 ZIP 可下載並通過完整性檢查', async () => {

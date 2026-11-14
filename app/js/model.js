@@ -100,7 +100,7 @@ export function sanitize(x) {
   const n = fresh();
   if (!x || typeof x !== 'object') return n;
   n.meta.createdAt = str(x.meta?.createdAt, 40) || n.meta.createdAt;
-  n.meta.qIndex = Math.min(QUESTIONS.length - 1, Math.max(0, Number(x.meta?.qIndex) || 0));
+  n.meta.qIndex = Math.min(QUESTIONS.length - 1, Math.max(0, Math.floor(Number(x.meta?.qIndex)) || 0));
   n.meta.started = x.meta?.started === true;
   n.meta.target = PLATFORM_IDS.includes(x.meta?.target) || x.meta?.target === 'ai' ? x.meta.target : 'lineOA';
   n.meta.aiTopics = {};
@@ -169,7 +169,7 @@ export function fromLegacyV1(x) {
   const extra = [notes.layout, notes.entries, notes.review].filter(Boolean).join('\n');
   if (extra) n.freeform.contact = str(extra, 3000);
   n.identity.brandName = str(x.brand, 30);
-  if (typeof x.photo === 'string' && /^data:image\/(png|jpeg|webp);base64,/.test(x.photo)) n.photo = x.photo;
+  if (typeof x.photo === 'string') n.photo = x.photo; // 格式與大小由 sanitize() 統一檢查
   n.selectedDesignId = DESIGN_BY_ID[x.designStyle] ? x.designStyle : 'tech';
   const line = n.platforms.lineOA;
   line.pages = x.pages === 2 ? 2 : 1;
@@ -191,14 +191,17 @@ export function fromKitV1(k) {
   n.identity.slogan = str(k.identity?.slogan, 60);
   for (const id of ['traits', 'audience', 'expertise']) n.answers[id] = strArr(k.identity?.[id], 2).map(legacyOpt);
   n.answers.avoid = strArr(k.visual?.avoid, 9).flatMap((v) => (v === '金色與米白' ? ['過度金色', '米白復古配色'] : [v]));
-  n.answers.tone = strArr(k.voice?.tone, 1);
+  n.answers.tone = strArr(k.voice?.tone, 1).map(legacyOpt);
+  n.answers.style = strArr(k.visual?.style, 1).map(legacyOpt);
+  n.answers.photo = strArr(k.visual?.photoPreference, 1).map(legacyOpt);
+  if (typeof k.visual?.photo === 'string') n.photo = k.visual.photo; // 由 sanitize() 檢查
   const pal = PALETTE_BY_LEGACY_NAME[k.visual?.palette?.name];
   if (pal) n.answers.palette = [pal];
   if (DESIGN_BY_ID[k.visual?.designStyle?.id]) n.selectedDesignId = k.visual.designStyle.id;
   if (k.freeform && typeof k.freeform === 'object') for (const q of QUESTIONS) if (typeof k.freeform[q.id] === 'string' && q.id !== 'name') n.freeform[q.id] = str(k.freeform[q.id], 3000);
   n.meta.started = true;
   const lo = k.extensions?.lineOA;
-  if (lo) return sanitize({ ...n, platforms: { lineOA: { ...lo, entriesCustom: true } } });
+  if (lo) return { ...n, platforms: { ...n.platforms, lineOA: { ...n.platforms.lineOA, ...lo, entriesCustom: true } } };
   return n;
 }
 
@@ -207,8 +210,9 @@ export function migrate(raw) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('不是有效的進度檔');
   if (raw.schemaVersion === 2 && raw.answers && raw.platforms) return sanitize(raw);
   if (raw.schemaVersion > 2) throw new Error('這個檔案來自較新版本，請先更新 APP');
-  if (raw.answers && Array.isArray(raw.entries)) return fromLegacyV1(raw);
-  if (raw.schemaVersion === 1 && raw.identity) return fromKitV1(raw);
+  // 所有舊格式轉換後，一律再經過 sanitize()，與 v2 使用同一套檢查
+  if (raw.answers && Array.isArray(raw.entries)) return sanitize(fromLegacyV1(raw));
+  if (raw.schemaVersion === 1 && raw.identity) return sanitize(fromKitV1(raw));
   throw new Error('不是品牌工作室的進度檔');
 }
 

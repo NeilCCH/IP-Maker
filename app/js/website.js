@@ -133,7 +133,7 @@ ${DESIGN_CSS[D.design.id] || ''}
     ${D.slogan ? `<p class="slogan">「${esc(D.slogan)}」</p>` : ''}
     ${ctaBtn()}<a class="btn ghost" href="#services">看看我能協助什麼</a>
   </div>
-  ${hasPhoto ? `<img class="photo" src="${D.photo}" alt="${esc(D.personName || D.titleName)}">` : ''}
+  ${hasPhoto ? `<img class="photo" src="${esc(D.photo)}" alt="${esc(D.personName || D.titleName)}">` : ''}
 </div></div>
 <section id="services"><div class="wrap"><h2>我能協助的事</h2><p class="sub">${esc(D.positioning)}</p>
   <div class="cards">${services.map((e, i) => `<article class="card">${svg(iconFor(e.label, i))}<h3>${esc(e.label)}</h3><p>${esc(e.description)}</p>${safeURL(e.url) ? `<a href="${esc(safeURL(e.url))}" target="_blank" rel="noopener noreferrer">${e.type === 'form' ? '填寫需求' : '了解更多'} →</a>` : ''}</article>`).join('')}</div>

@@ -170,7 +170,7 @@ async function api(req, env, url) {
   }
 
   if (!adminEmails(env).includes(me.email)) return json({ error: '只有管理者可以使用' }, 403);
-  if (path === '/api/admin/users') return json({ users: await registry(env).list() });
+  if (path === '/api/admin/users') return json({ users: (await registry(env).list()).map((u) => ({ ...u, isAdmin: adminEmails(env).includes(u.email) })) });
   if (path === '/api/admin/decide') {
     const status = ['approved', 'rejected', 'pending'].includes(body.status) ? body.status : null;
     const email = String(body.email || '').toLowerCase();

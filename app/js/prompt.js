@@ -19,7 +19,7 @@ function platformConfig(state, D, pid) {
     });
     return [
       `圖文選單：${L.pages} 頁 × 每頁 ${L.count} 格（${L.count === 6 ? '3 欄 × 2 行' : '4 欄 × 2 行'}），圖片 2500×1686。`,
-      L.pages === 2 ? '雙頁：切頁按鈕獨立放在上方（高 200px），不占服務格；使用 Messaging API richmenuswitch 與 alias（brand-page-1／brand-page-2）。' : '',
+      L.pages === 2 ? '雙頁：切頁按鈕獨立放在上方（高 200px），不占服務格；使用 Messaging API richmenuswitch 與 alias（每次發佈使用新的 alias 名稱）。' : '',
       L.count === 8 || L.pages === 2 ? '注意：八格或雙頁無法用官方後台現成版型，需 Messaging API。' : '單頁六格可使用官方後台「大型 6 格」版型手動設定。',
       ...pages,
       `歡迎訊息：\n${textValue(state, D, 'lineOA', 'greeting')}`,
