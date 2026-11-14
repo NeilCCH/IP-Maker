@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<title>品牌工作室｜操作流程圖</title>
+<style>
+:root{--p:#155eef;--pi:#0b46c2;--a:#08b8d8;--bg:#f5f8fc;--soft:#edf4ff;--ink:#0f2747;--mut:#50637a;--line:#c9d6e6;--ok:#0f7a4f;--okbg:#e7f6ef;--todo:#8a5a00;--todobg:#fff4d6}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);font-family:"PingFang TC","Noto Sans TC","Microsoft JhengHei","WenQuanYi Zen Hei",sans-serif;color:var(--ink);line-height:1.5}
+.page{width:1400px;padding:44px 48px 40px}
+h1{margin:0 0 4px;font-size:34px}.sub{margin:0 0 28px;color:var(--mut);font-size:17px}
+.row{display:flex;gap:18px;align-items:stretch}
+.box{background:#fff;border:1.5px solid var(--line);border-radius:14px;padding:16px 18px;flex:1}
+.box h3{margin:0 0 6px;font-size:19px}.box p{margin:0;color:var(--mut);font-size:15px}
+.box ul{margin:6px 0 0;padding-left:1.1em;color:var(--mut);font-size:15px}
+.gate{background:#fff}.gate .n{background:var(--ink)}
+.n{display:inline-grid;place-items:center;width:30px;height:30px;border-radius:50%;background:var(--p);color:#fff;font-weight:800;font-size:16px;margin-right:8px;vertical-align:-3px}
+.step{border-color:var(--p);box-shadow:inset 0 0 0 1px var(--p)}
+.arrow{text-align:center;color:var(--p);font-size:26px;line-height:1;margin:8px 0;font-weight:700}
+.band{font-size:14px;font-weight:700;color:var(--p);letter-spacing:.1em;margin:0 0 8px}
+.tag{display:inline-block;border-radius:99px;padding:1px 10px;font-size:13px;font-weight:700;margin:6px 4px 0 0}
+.t-me{background:var(--todobg);color:var(--todo)}.t-sys{background:var(--okbg);color:var(--ok)}.t-off{background:#eef2f7;color:var(--mut)}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.chip{background:var(--soft);color:var(--pi);border-radius:8px;padding:3px 10px;font-size:14px;font-weight:600}
+.split{display:grid;grid-template-columns:1fr 1fr 1fr;gap:18px}
+.col{background:#fff;border:1.5px solid var(--line);border-radius:14px;padding:16px 18px}
+.col h3{margin:0 0 8px;font-size:19px;color:var(--pi)}
+.flow{list-style:none;margin:0;padding:0;counter-reset:f}
+.flow li{counter-increment:f;position:relative;padding:7px 0 7px 34px;font-size:15px;border-bottom:1px dashed var(--line)}
+.flow li:last-child{border-bottom:0}
+.flow li::before{content:counter(f);position:absolute;left:0;top:7px;width:24px;height:24px;border-radius:50%;background:var(--soft);color:var(--pi);font-weight:800;font-size:13px;display:grid;place-items:center}
+.flow small{display:block;color:var(--mut);font-size:13.5px}
+.side{display:grid;grid-template-columns:1fr 1fr 1fr;gap:18px;margin-top:22px}
+.side .box{border-style:dashed}
+.legend{margin-top:20px;font-size:14px;color:var(--mut)}
+.building{color:var(--mut);font-size:14px;margin-top:10px}
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>品牌工作室｜操作流程圖</h1>
+  <p class="sub">https://ip-maker.neocch.workers.dev　從登入到完成設定的完整步驟</p>
+
+  <p class="band">進入系統</p>
+  <div class="row">
+    <div class="box gate"><h3><span class="n">A</span>Google 帳號登入</h3><p>用自己的 Gmail 登入，只確認 email</p></div>
+    <div class="box gate"><h3><span class="n">B</span>填寫使用申請</h3><p>單位、事業部、職稱、姓名（第一次才要填）</p></div>
+    <div class="box gate"><h3><span class="n">C</span>管理者審核</h3><p>管理者在「管理」頁按「同意使用」後才能進入</p></div>
+  </div>
+  <div class="arrow">↓</div>
+
+  <p class="band">首頁</p>
+  <div class="row">
+    <div class="box"><h3>選擇要建立的項目</h3>
+      <div class="chips"><span class="chip">LINE 官方帳號</span><span class="chip">個人網頁</span><span class="chip">AI 工具提示詞</span></div>
+      <p class="building">建置中（尚未開放）：Facebook、Instagram、Threads</p></div>
+  </div>
+  <div class="arrow">↓</div>
+
+  <p class="band">三個步驟（品牌資料填一次，三個項目共用）</p>
+  <div class="row">
+    <div class="box step"><h3><span class="n">1</span>說說你自己</h3><p>17 題，一次一題，自動保存，全部自己就能完成</p>
+      <ul><li>認識自己：圈 6 個詞 → 選 3 個品牌關鍵字</li><li>我服務誰：客群、專長、服務順序</li><li>我怎麼說話：語氣、三個不要</li><li>我長什麼樣：風格、配色、字型、圖像、照片、識別</li><li>我是誰：命名、品牌核心、名稱呈現、聯絡資料</li></ul></div>
+    <div class="box step"><h3><span class="n">2</span>選喜歡的樣子</h3><p>同一份資料，三種風格的實際素材並排比較</p>
+      <div class="chips"><span class="chip">專業科技</span><span class="chip">簡約現代</span><span class="chip">親和專業</span></div>
+      <ul><li>都會套用你的配色、照片偏好與禁忌</li><li>之後隨時可以回來換，不影響已填內容</li></ul></div>
+    <div class="box step"><h3><span class="n">3</span>連接並完成</h3><p>依首頁選的項目，進入對應的成果頁（見下方）</p>
+      <ul><li>最上方：我的品牌規範（brand.md）</li><li>可隨時切換到其他已開放的項目</li></ul></div>
+  </div>
+  <div class="arrow">↓</div>
+
+  <p class="band">第三步的三種成果</p>
+  <div class="split">
+    <div class="col"><h3>LINE 官方帳號</h3>
+      <ol class="flow">
+        <li>預覽<small>手機模擬畫面：頭像、歡迎圖卡、圖文選單</small></li>
+        <li>修改<small>選單格數與頁數、每一格的功能與回覆文字</small></li>
+        <li>下載<small>素材包：圖片、文案、設定引導</small></li>
+        <li>提示詞<small>給外部 AI 接續製作</small></li>
+        <li>設定引導<small>照步驟到 LINE 後台設定，逐項打勾</small></li>
+      </ol>
+      <span class="tag t-sys">系統備料</span><span class="tag t-me">本人到 LINE 後台設定</span></div>
+    <div class="col"><h3>個人網頁</h3>
+      <ol class="flow">
+        <li>預覽<small>手機與電腦寬度，列出上線前待填項目</small></li>
+        <li>修改<small>首頁文字、合作方式、關於我</small></li>
+        <li>下載<small>index.html，單一檔案可直接上線</small></li>
+        <li>提示詞<small>給外部 AI 接續製作</small></li>
+        <li>設定引導<small>上傳到免費主機，把網址填回 APP</small></li>
+      </ol>
+      <span class="tag t-sys">系統產出網頁</span><span class="tag t-me">本人上傳到免費主機</span></div>
+    <div class="col"><h3>AI 工具提示詞</h3>
+      <ol class="flow">
+        <li>選用途<small>品牌規範／長期設定／AI 生圖／寫貼文／簡報與海報／短影音腳本</small></li>
+        <li>填這次的主題<small>例如「退休講座海報」（選填）</small></li>
+        <li>複製或下載提示詞<small>已帶入關鍵字、語氣、色碼、字型、禁忌</small></li>
+        <li>貼到其他 AI 工具<small>Claude、ChatGPT、Gemini、Canva、Gamma…</small></li>
+      </ol>
+      <span class="tag t-sys">系統組好提示詞</span><span class="tag t-me">本人貼到 AI 工具</span></div>
+  </div>
+
+  <div class="side">
+    <div class="box"><h3>隨時可用：備份到雲端</h3><p>右上角按鈕。把進度存到自己的 Google 雲端硬碟、iCloud 或 LINE Keep；超過 7 天沒備份會出現紅點。</p></div>
+    <div class="box"><h3>進階工具</h3><p>匯出／匯入進度、下載全部素材包、載入範例資料、清除此裝置的資料。</p></div>
+    <div class="box"><h3>管理（只有管理者看得到）</h3><p>審核使用申請：同意使用、不同意、停用帳號。有待審核時顯示紅色數字。</p></div>
+  </div>
+
+  <p class="legend"><span class="tag t-sys">綠色</span>系統完成　<span class="tag t-me">黃色</span>需要本人操作　<span class="tag t-off">灰色</span>尚未開放　｜　問卷資料只存在使用者自己的裝置；APP 不會代為登入或發文。</p>
+</div>
+</body>
+</html>
