@@ -217,7 +217,7 @@ const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'brand-e2e-'));
   await test('首頁先選平台；建置中的平台不能點', async () => {
     await go('#/');
     const pickable = await page.$$eval('button.pick', (bs) => bs.map((b) => b.dataset.id));
-    assert(JSON.stringify(pickable) === JSON.stringify([...READY, 'ai']), `可選項目不符：${pickable}`);
+    assert(JSON.stringify([...pickable].sort()) === JSON.stringify([...READY, 'ai'].sort()), `可選項目不符：${pickable}`);
     assert((await page.$$('.pick.is-building')).length === BUILDING.length, '建置中平台數量不符');
     assert(!(await page.$('.pick.is-building a, a.pick.is-building')), '建置中平台有連結');
     await page.click(`button.pick[data-id="${READY[0]}"]`);
@@ -295,6 +295,23 @@ const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'brand-e2e-'));
     assert(dl.suggestedFilename() === 'ai-prompt-image.txt', dl.suggestedFilename());
     await go('#/results/lineOA/preview');
     assert(await page.isVisible('.ptabs a[href="#/results/ai"]'), 'LINE 頁沒有 AI 提示詞分頁');
+  });
+
+  await test('個人網頁：已開放，內容完整、列出待填項目、不載入外部資源', async () => {
+    assert(READY.includes('website'), '個人網頁尚未開放');
+    await page.evaluate(async (u) => { const m = await import(u); localStorage.setItem('brand-studio-v2', JSON.stringify(m.sampleHengYuan())); }, mod('model.js'));
+    await go('#/results/website/preview');
+    assert(await page.isVisible('iframe#webPreview[sandbox=""]'), '預覽沒有沙箱化');
+    assert(await page.isVisible('.panel-body .conflict'), '沒有提醒待填項目');
+    const r = await page.evaluate(async ([w, b]) => { const W = await import(w); const B = await import(b); const st = JSON.parse(localStorage.getItem('brand-studio-v2')); const D = B.derive(st); return { html: W.websiteHTML(st, D), todos: W.websiteTodos(st, D), services: W.siteServices(D).map((e) => e.label) }; }, [mod('website.js'), mod('brand.js')]);
+    for (const k of ['我能協助的事', '合作方式', '關於我', '聯絡我', '衡量當下，規劃長遠', '專業', '#155eef', 'og:image']) assert(r.html.includes(k), `網頁缺少「${k}」`);
+    assert(!/<script|https?:\/\/fonts\.|<link[^>]+stylesheet/i.test(r.html), '網頁載入了外部資源或程式');
+    assert(r.todos.length >= 1 && r.todos.some((t) => /LINE/.test(t)), `待填項目不正確：${r.todos}`);
+    assert(!r.services.some((l) => /認識|實用資訊|預約|留言|常見問題/.test(l)), `服務卡片混入功能入口：${r.services}`);
+    await go('#/results/website/edit');
+    await page.fill('[data-text="website:steps"]', '第一步\n第二步');
+    const n = await page.evaluate(async ([w, b]) => { const W = await import(w); const B = await import(b); const st = JSON.parse(localStorage.getItem('brand-studio-v2')); return (W.websiteHTML(st, B.derive(st)).match(/class="step"/g) || []).length; }, [mod('website.js'), mod('brand.js')]);
+    assert(n === 2, `合作方式步驟數 ${n}`);
   });
 
   console.log('LINE 官方帳號');

@@ -5,7 +5,7 @@ import { derive } from '../brand.js';
 import { buildPrompt } from '../prompt.js';
 import { layout, pageEntries, entryStatus, richMenuConfig, RM_W, RM_H } from '../line.js';
 import { entriesOutOfSync, entriesFromServices } from '../model.js';
-import { websiteHTML } from '../website.js';
+import { websiteHTML, websiteTodos } from '../website.js';
 import { prepare, assetBlob, platformZip, textsTxt, guideDynamic, replyList } from '../export.js';
 import { qIndexOf } from '../data/questions.js';
 import { brandMd, guidePrompt, missingItems, AI_PROMPTS, AI_PROMPT_BY_ID, aiPromptText } from '../brandguide.js';
@@ -56,6 +56,7 @@ function previewTab(pid, D) {
   if (pid === 'lineOA') return `<div class="split">${lineMock(D)}<div><h3>素材</h3><div class="assets">${assets.filter((a) => !a.id.startsWith('clickmap')).map((a) => assetFigure(pid, a)).join('')}</div></div></div>`;
   if (pid === 'website') return `<div class="row"><button type="button" class="chip" data-action="web-width" data-v="390" aria-pressed="true">手機寬度</button><button type="button" class="chip" data-action="web-width" data-v="1024" aria-pressed="false">電腦寬度</button></div>
     <div class="web-frame"><iframe id="webPreview" title="個人網頁預覽" sandbox="" srcdoc="${esc(websiteHTML(S(), D))}"></iframe></div>
+    ${(() => { const td = websiteTodos(S(), D); return td.length ? `<div class="conflict"><p>${icon('question')} 上線前還有 ${td.length} 處待填：${td.map(esc).join('、')}。</p><div class="row"><a class="chip" href="#/results/website/edit">去修改網頁文字</a><a class="chip" href="#/profile" data-action="goto-q" data-q="contact">去填聯絡資料</a></div></div>` : '<p class="parse"><span class="ok">網頁內容已完整，可以上線。</span></p>'; })()}
     <p class="hint">這是下載後的網頁實際樣子。黃色虛線框是【待填】欄位，上線前請換成真實資料。</p>
     <div class="assets">${assets.map((a) => assetFigure(pid, a)).join('')}</div>`;
   return `<div class="assets">${assets.map((a) => assetFigure(pid, a)).join('')}</div><h3>文字內容</h3>${textCards(pid, D)}`;

@@ -139,7 +139,7 @@ export const PLATFORMS = [
 export const PLATFORM_BY_ID = Object.fromEntries(PLATFORMS.map((p) => [p.id, p]));
 
 /** 已開放的平台。其他平台功能保留在程式中，完成驗收後加進這裡就會開放。 */
-export const READY_PLATFORMS = ['lineOA'];
+export const READY_PLATFORMS = ['lineOA', 'website'];
 export const isReady = (id) => READY_PLATFORMS.includes(id);
 
 /** 不屬於社群平台的成果：AI 工具提示詞 */
