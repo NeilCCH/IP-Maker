@@ -297,7 +297,7 @@ export function onAction(act, el) {
     case 'q-next':
       s.meta.started = true;
       if (s.meta.qIndex < QUESTIONS.length - 1) { s.meta.qIndex++; commit(); focusTitle(); }
-      else { save(); location.hash = '#/design'; }
+      else { s.meta.profileDone = true; save(); location.hash = '#/design'; }
       break;
     case 'q-jump': s.meta.qIndex = +el.dataset.i; commit(); focusTitle(); break;
     default: return false;

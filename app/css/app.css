@@ -410,3 +410,14 @@ input[readonly] { background: var(--c-bg); color: var(--c-muted); }
 .connect-card { border-color: #cfe0fb; }
 .connect-card h3 { display: flex; align-items: center; gap: var(--s2); }
 .connect-card details summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; color: var(--c-primary-ink); font-weight: 600; }
+
+/* 第三步：項目選單 */
+.hub { margin-bottom: var(--s5); }
+a.hub-pick { text-decoration: none; cursor: pointer; transition: border-color .15s, box-shadow .15s, transform .12s; }
+a.hub-pick:hover { border-color: var(--c-primary); box-shadow: 0 6px 16px rgba(21, 94, 239, .12); }
+a.hub-pick:active { transform: scale(.99); }
+.hub-pick .go { color: var(--c-primary-ink); font-weight: 700; margin-top: 6px; }
+.platform-row li.is-building { background: var(--c-bg); border-style: dashed; color: var(--c-muted); }
+.platform-row li.is-building .ic { color: var(--c-muted); }
+.page-head .eyebrow a { color: inherit; }
+@media (min-width: 760px) { .platform-row { grid-template-columns: repeat(3, 1fr); } }

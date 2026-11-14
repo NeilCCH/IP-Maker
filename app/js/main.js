@@ -123,9 +123,11 @@ if ('serviceWorker' in navigator && location.protocol !== 'file:') {
       });
     });
   }).catch(() => {});
+  // 只有「更新版本」時才重新整理；第一次安裝離線功能時不重整，避免打斷正在操作的使用者
+  const hadController = !!navigator.serviceWorker.controller;
   let reloaded = false;
   navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (reloaded) return;
+    if (reloaded || !hadController) return;
     reloaded = true;
     location.reload();
   });

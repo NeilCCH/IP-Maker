@@ -20,17 +20,6 @@ const TABS = [
   ['preview', '預覽'], ['edit', '修改'], ['download', '下載'], ['prompt', '提示詞'], ['guide', '設定引導'],
 ];
 
-function overview(current) {
-  return `<div class="overview" role="list">${PLATFORMS.map((P) => {
-    if (!isReady(P.id)) return `<div role="listitem" class="ov is-building" aria-disabled="true">${icon(P.icon)}<b>${esc(P.name)}</b><span class="ov-counts"><span class="st st-none">建置中</span></span></div>`;
-    const st = statusOf(P.id, S());
-    const n = (k) => st.filter((x) => x.status === k).length;
-    return `<a role="listitem" class="ov ${P.id === current ? 'is-current' : ''}" href="#/results/${P.id}/${P.id === current ? 'guide' : 'preview'}">
-      ${icon(P.icon)}<b>${esc(P.name)}</b>
-      <span class="ov-counts"><span class="st st-done">已完成 ${n('done')}</span><span class="st st-todo">待本人操作 ${n('todo')}</span><span class="st st-none">尚未串接 ${n('none')}</span></span></a>`;
-  }).join('')}</div>`;
-}
-
 // ---------- 預覽 ----------
 function lineMock(D) {
   const L = S().platforms.lineOA;
@@ -266,7 +255,7 @@ function guideCard(D) {
 }
 
 // ---------- 主畫面 ----------
-const platformNav = (pid, tab) => `<nav class="ptabs" aria-label="成果">${PLATFORMS.map((x) => (isReady(x.id) ? `<a href="#/results/${x.id}/${tab}" aria-current="${x.id === pid ? 'page' : 'false'}">${icon(x.icon, 'ic sm')}${esc(x.name)}</a>` : `<span class="is-building" aria-disabled="true" title="建置中">${icon(x.icon, 'ic sm')}${esc(x.name)}<small>建置中</small></span>`)).join('')}<a href="#/results/ai" aria-current="${pid === 'ai' ? 'page' : 'false'}">${icon(AI_TARGET.icon, 'ic sm')}${esc(AI_TARGET.name)}</a></nav>`;
+const platformNav = (pid, tab) => `<nav class="ptabs" aria-label="製作項目"><a href="#/results">← 全部項目</a>${PLATFORMS.map((x) => (isReady(x.id) ? `<a href="#/results/${x.id}/${tab}" aria-current="${x.id === pid ? 'page' : 'false'}">${icon(x.icon, 'ic sm')}${esc(x.name)}</a>` : `<span class="is-building" aria-disabled="true" title="建置中">${icon(x.icon, 'ic sm')}${esc(x.name)}<small>建置中</small></span>`)).join('')}<a href="#/results/ai" aria-current="${pid === 'ai' ? 'page' : 'false'}">${icon(AI_TARGET.icon, 'ic sm')}${esc(AI_TARGET.name)}</a></nav>`;
 
 /** AI 工具提示詞：依用途選一種，複製後貼到其他 AI 工具 */
 function renderAI(root, kindArg) {
@@ -275,7 +264,7 @@ function renderAI(root, kindArg) {
   const P = AI_PROMPT_BY_ID[kindArg] || AI_PROMPTS[0];
   const miss = missingItems(s, D);
   root.innerHTML = `
-  <div class="page-head"><p class="eyebrow">第三步</p><h1 tabindex="-1">AI 工具提示詞</h1>
+  <div class="page-head"><p class="eyebrow"><a href="#/results">第三步・選擇製作項目</a> ／ AI 工具提示詞</p><h1 tabindex="-1">AI 工具提示詞</h1>
   <p class="lead">你的品牌元素已經整理成提示詞。選一個用途，複製後貼到對應的 AI 工具，產出的內容就會符合你的品牌。</p></div>
   ${platformNav('ai', 'preview')}
   <section class="panel" aria-labelledby="pTitle">
@@ -291,19 +280,41 @@ function renderAI(root, kindArg) {
   </section>`;
 }
 
+/** 第三步的入口：選擇要製作的項目。品牌問卷只做一次，這裡可以反覆回來做不同項目。 */
+function renderHub(root) {
+  const s = S();
+  const D = derive(s);
+  const card = (id, name, ic, summary, extra) => `<a class="pick hub-pick" href="#/results/${id}">${icon(ic)}<b>${esc(name)}</b><small>${esc(summary)}</small>${extra}<span class="go">開始製作 →</span></a>`;
+  root.innerHTML = `
+  <div class="page-head"><p class="eyebrow">第三步</p><h1 tabindex="-1">選擇要製作的項目</h1>
+  <p class="lead">你的品牌資料已經準備好，下面每個項目都會直接套用，不用重填問卷。做完一個，隨時可以回來做下一個。</p></div>
+  ${s.meta.profileDone ? '' : `<div class="conflict"><p>${icon('question')} 品牌問卷還沒做完，現在製作的內容會有比較多「待填」。</p><div class="row"><a class="chip" href="#/profile">回去完成問卷</a></div></div>`}
+  <div class="platform-pick hub">
+    ${PLATFORMS.map((P) => {
+      if (!isReady(P.id)) return `<div class="pick is-building" aria-disabled="true">${icon(P.icon)}<b>${esc(P.name)}</b><small>${esc(P.summary)}</small><span class="st st-none">建置中</span></div>`;
+      const st = statusOf(P.id, s);
+      const todo = st.filter((x) => x.status === 'todo').length;
+      const manualDone = st.filter((x) => x.kind === 'manual' && x.status === 'done').length;
+      return card(P.id, P.name, P.icon, P.summary, `<span class="st ${todo ? 'st-todo' : 'st-done'}">${todo ? (manualDone ? `進行中・還有 ${todo} 步` : `${todo} 個設定步驟`) : '已完成'}</span>`);
+    }).join('')}
+    ${card('ai', AI_TARGET.name, AI_TARGET.icon, AI_TARGET.summary, '<span class="st st-done">可直接使用</span>')}
+  </div>
+  ${guideCard(D)}
+  <div class="actions-row"><a class="btn ghost" href="#/design">← 回第二步換風格</a><a class="btn ghost" href="#/profile">修改品牌問卷</a></div>`;
+}
+
 export function render(root, [pidArg, tabArg]) {
-  if (pidArg === 'ai' || (!pidArg && S().meta.target === 'ai')) return renderAI(root, tabArg);
-  const fallback = isReady(S().meta.target) ? S().meta.target : PLATFORMS.find((p) => isReady(p.id)).id;
-  const pid = PLATFORM_BY_ID[pidArg] && isReady(pidArg) ? pidArg : fallback;
+  if (!pidArg) return renderHub(root);
+  if (pidArg === 'ai') return renderAI(root, tabArg);
+  const pid = PLATFORM_BY_ID[pidArg] && isReady(pidArg) ? pidArg : null;
+  if (!pid) return renderHub(root);
   const tab = TABS.some(([t]) => t === tabArg) ? tabArg : 'preview';
   const D = derive(S());
   const P = PLATFORM_BY_ID[pid];
   const content = { preview: previewTab, edit: editTab, download: downloadTab, prompt: promptTab, guide: guideTab }[tab](pid, D);
   root.innerHTML = `
-  <div class="page-head"><p class="eyebrow">第三步</p><h1 tabindex="-1">連接並完成</h1>
-  <p class="lead">照「預覽 → 修改 → 下載 → 提示詞 → 設定引導」的順序完成。標示「建置中」的平台，完成後會陸續開放。</p></div>
-  ${guideCard(D)}
-  ${overview(pid)}
+  <div class="page-head"><p class="eyebrow"><a href="#/results">第三步・選擇製作項目</a> ／ ${esc(P.name)}</p><h1 tabindex="-1">製作 ${esc(P.name)}</h1>
+  <p class="lead">照「預覽 → 修改 → 下載 → 提示詞 → 設定引導」的順序完成。做完可以回到項目選單，製作其他項目。</p></div>
   ${platformNav(pid, tab)}
   <section class="panel" aria-labelledby="pTitle">
     <header class="panel-head"><h2 id="pTitle">${esc(P.name)}</h2><p>${esc(P.summary)}・風格：${esc(D.design.name)}</p></header>

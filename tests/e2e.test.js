@@ -178,7 +178,7 @@ const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'brand-e2e-'));
 
   await test('品牌規範：內容完整、待補項目標示、可複製與下載', async () => {
     await page.evaluate(async (u) => { const m = await import(u); localStorage.setItem('brand-studio-v2', JSON.stringify(m.sampleHengYuan())); }, mod('model.js'));
-    await go('#/results/lineOA/preview');
+    await go('#/results');
     assert(await page.isVisible('[data-action="guide-copy"]'), '沒有品牌規範區塊');
     const md = await page.evaluate(async ([g, b]) => { const G = await import(g); const B = await import(b); const st = JSON.parse(localStorage.getItem('brand-studio-v2')); return { md: G.brandMd(st, B.derive(st)), prompt: G.guidePrompt(st, B.derive(st)), miss: G.missingItems(st, B.derive(st)) }; }, [mod('brandguide.js'), mod('brand.js')]);
     for (const k of ['品牌核心', '我是誰', '服務對象', '三個品牌關鍵字', '最像我的 6 個詞', '語氣規則', '三個「不要」', '#155eef', '約 60%', '字型層級', '標題', '內文', '數字', '圖像風格', '識別方式', '衡量當下，規劃長遠'])
@@ -214,14 +214,39 @@ const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'brand-e2e-'));
   const READY = await page.evaluate(async (u) => (await import(u)).READY_PLATFORMS, mod('platforms.js'));
   const BUILDING = ['facebook', 'website', 'instagram', 'lineOA', 'threads'].filter((p) => !READY.includes(p));
 
-  await test('首頁先選平台；建置中的平台不能點', async () => {
+  await test('問卷只做一次：首頁不先選平台；第三步是項目選單，建置中的項目不能點', async () => {
+    const saved = await state(); // 這項測試用空白資料，結束時還原，避免影響後面的測試
+    await page.evaluate(async (u) => { const m = await import(u); localStorage.setItem('brand-studio-v2', JSON.stringify(m.fresh())); }, mod('model.js'));
     await go('#/');
-    const pickable = await page.$$eval('button.pick', (bs) => bs.map((b) => b.dataset.id));
-    assert(JSON.stringify([...pickable].sort()) === JSON.stringify([...READY, 'ai'].sort()), `可選項目不符：${pickable}`);
-    assert((await page.$$('.pick.is-building')).length === BUILDING.length, '建置中平台數量不符');
-    assert(!(await page.$('.pick.is-building a, a.pick.is-building')), '建置中平台有連結');
-    await page.click(`button.pick[data-id="${READY[0]}"]`);
-    assert((await state()).meta.target === READY[0], '未記錄選擇的平台');
+    assert(!(await page.$('button.pick')), '首頁仍要求先選平台');
+    assert((await page.getAttribute('.home .btn.big', 'href')) === '#/profile', '首頁主按鈕不是開始問卷');
+    // 做完最後一題 → 記錄問卷完成 → 進第二步
+    await page.evaluate((n) => { const st = JSON.parse(localStorage.getItem('brand-studio-v2')); st.meta.qIndex = n; localStorage.setItem('brand-studio-v2', JSON.stringify(st)); }, Object.keys(QI).length - 1);
+    await go('#/profile');
+    await page.click('[data-action="q-next"]');
+    await page.waitForFunction(() => location.hash === '#/design');
+    assert((await state()).meta.profileDone === true, '沒有記錄問卷完成');
+    assert((await page.getAttribute('.actions-row .btn.primary', 'href')) === '#/results', '第二步的下一步不是項目選單');
+    await go('#/results');
+    assert((await page.textContent('h1')).includes('選擇要製作的項目'), '第三步不是項目選單');
+    const items = await page.$$eval('a.hub-pick', (as) => as.map((a) => a.getAttribute('href').split('/').pop()));
+    assert(JSON.stringify([...items].sort()) === JSON.stringify([...READY, 'ai'].sort()), `可選項目不符：${items}`);
+    assert((await page.$$('.hub .pick.is-building')).length === BUILDING.length, '建置中項目數量不符');
+    assert(!(await page.$('.hub .pick.is-building a, .hub a.pick.is-building')), '建置中項目有連結');
+    assert(await page.isVisible('[data-action="guide-copy"]'), '項目選單沒有品牌規範');
+    // 做完一個再回來做另一個，問卷答案不變
+    const before = JSON.stringify((await state()).answers);
+    await page.click(`a.hub-pick[href="#/results/${READY[0]}"]`);
+    await page.waitForSelector('.panel');
+    await page.click('.ptabs a[href="#/results"]');
+    await page.waitForSelector('a.hub-pick');
+    await page.click('a.hub-pick[href="#/results/ai"]');
+    await page.waitForSelector('#aiOut');
+    assert(JSON.stringify((await state()).answers) === before, '切換項目改動了問卷答案');
+    await go('#/');
+    assert((await page.getAttribute('.home .btn.big', 'href')) === '#/results', '問卷完成後首頁沒有直接帶到項目選單');
+    await setState(saved);
+    await go('#/');
   });
 
   await test('已開放平台有 預覽／修改／下載／提示詞／設定引導；建置中平台無連結', async () => {
@@ -265,15 +290,11 @@ const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'brand-e2e-'));
     assert(await page.isVisible('[data-action="prompt-regen"]'), '未詢問是否重新生成');
   });
 
-  await test('AI 工具提示詞：首頁可選，六種用途都帶入品牌元素，可填主題、複製與下載', async () => {
+  await test('AI 工具提示詞：項目選單可選，六種用途都帶入品牌元素，可填主題、複製與下載', async () => {
     await page.evaluate(async (u) => { const m = await import(u); localStorage.setItem('brand-studio-v2', JSON.stringify(m.sampleHengYuan())); }, mod('model.js'));
-    await go('#/');
-    await page.click('button.pick[data-id="ai"]');
-    assert((await state()).meta.target === 'ai', '未記錄選擇 AI 工具提示詞');
-    assert((await page.textContent('.home > .btn.big')).includes('AI 工具提示詞'), '開始按鈕沒有顯示選擇的項目');
-    await go('#/design');
-    assert((await page.getAttribute('.actions-row .btn.primary', 'href')) === '#/results/ai', '第二步的下一步沒有導向 AI 提示詞');
     await go('#/results');
+    await page.click('a.hub-pick[href="#/results/ai"]');
+    await page.waitForSelector('#aiOut');
     assert((await page.textContent('h1')).includes('AI 工具提示詞'), '第三步沒有顯示 AI 提示詞頁');
     const kinds = await page.$$eval('.subtabs a', (as) => as.map((a) => a.getAttribute('href').split('/').pop()));
     assert(kinds.length === 6, `用途數量 ${kinds.length}`);

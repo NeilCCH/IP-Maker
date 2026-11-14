@@ -26,7 +26,7 @@ export function fresh() {
   const s = {
     schemaVersion: SCHEMA_VERSION,
     app: 'brand-studio',
-    meta: { createdAt: now, updatedAt: now, qIndex: 0, started: false, target: 'lineOA', lastBackupAt: '', aiTopics: {} },
+    meta: { createdAt: now, updatedAt: now, qIndex: 0, started: false, target: 'lineOA', lastBackupAt: '', aiTopics: {}, profileDone: false },
     answers: Object.fromEntries([...QUESTIONS.map((q) => q.id), ...EXTRA_ANSWER_IDS].map((id) => [id, []])),
     freeform: Object.fromEntries(QUESTIONS.map((q) => [q.id, ''])),
     resolutions: {},
@@ -103,6 +103,7 @@ export function sanitize(x) {
   n.meta.createdAt = str(x.meta?.createdAt, 40) || n.meta.createdAt;
   n.meta.qIndex = Math.min(QUESTIONS.length - 1, Math.max(0, Math.floor(Number(x.meta?.qIndex)) || 0));
   n.meta.started = x.meta?.started === true;
+  n.meta.profileDone = x.meta?.profileDone === true;
   n.meta.target = PLATFORM_IDS.includes(x.meta?.target) || x.meta?.target === 'ai' ? x.meta.target : 'lineOA';
   n.meta.aiTopics = {};
   if (x.meta?.aiTopics && typeof x.meta.aiTopics === 'object')
@@ -280,6 +281,7 @@ export function sampleHengYuan() {
   n.identity.positioning = '退休規劃・企業與家庭風險';
   n.selectedDesignId = 'tech';
   n.meta.started = true;
+  n.meta.profileDone = true;
   syncEntries(n);
   n.platforms.lineOA.count = 8; // 範例使用 8 格
   n.platforms.lineOA.entries[0].label = '認識衡遠';
