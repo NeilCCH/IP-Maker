@@ -8,6 +8,7 @@ import { entriesOutOfSync, entriesFromServices } from '../model.js';
 import { websiteHTML, websiteTodos } from '../website.js';
 import { prepare, assetBlob, platformZip, textsTxt, guideDynamic, replyList } from '../export.js';
 import { qIndexOf } from '../data/questions.js';
+import { lineStatus, lineConnect, lineApply, lineRollback, lineDisconnect, applySummary } from '../lineconnect.js';
 import { brandMd, guidePrompt, missingItems, AI_PROMPTS, AI_PROMPT_BY_ID, aiPromptText } from '../brandguide.js';
 import { ENTRY_TYPES, TYPE_NAME, replyValue, generateReply, formScript, formManual, formEntries, parseFormResult, LINE_REPLY_MAX } from '../entries.js';
 import { store, commit, save } from '../store.js';
@@ -156,12 +157,61 @@ function promptTab(pid, D) {
 }
 
 // ---------- 設定引導 ----------
+// ---------- LINE：讓系統代設 ----------
+let lineState = null; // 後台回傳的連接狀態；null 表示尚未查詢
+let lineError = '';
+
+function lineConnectCard() {
+  const s = lineState;
+  const head = `<h3>${icon('link', 'ic sm')} 讓系統代設（選用）</h3>`;
+  if (lineError) return `${head}<p class="hint">${esc(lineError)}</p><p class="hint">不使用代設也沒關係，照下面的步驟一樣可以自己完成設定。</p>`;
+  if (!s) return `${head}<p class="hint">檢查中…</p>`;
+  if (!s.enabled) return `${head}<p>代設功能尚未啟用。請管理者到 Cloudflare 後台設定加密金鑰（TOKEN_KEY）後即可使用。</p><p class="hint">在這之前，照下面的步驟一樣可以自己完成設定。</p>`;
+  if (!s.connected)
+    return `${head}
+    <p>授權一次，之後選單上架、歡迎訊息、每一格的回覆都由系統處理。你之後在 APP 修改內容，按「套用」就會更新，不用再進 LINE 後台。</p>
+    <ol class="small-steps">
+      <li>到 <a href="https://manager.line.biz/" target="_blank" rel="noopener noreferrer">LINE 官方帳號後台 ↗</a> →「設定」→「Messaging API」→ 按「啟用 Messaging API」（第一次要選一個服務提供者，名稱自訂即可）。</li>
+      <li>同一頁會出現 <b>Channel secret</b>，複製貼到下面。</li>
+      <li>到 <a href="https://developers.line.biz/console/" target="_blank" rel="noopener noreferrer">LINE Developers ↗</a> → 選你的帳號 →「Messaging API」分頁 → 最下方 <b>Channel access token</b> 按「Issue」，複製貼到下面。</li>
+    </ol>
+    <label class="field"><span>Channel secret</span><input id="lineSecret" type="password" autocomplete="off" spellcheck="false" placeholder="32 個英數字"></label>
+    <label class="field"><span>Channel access token</span><input id="lineToken" type="password" autocomplete="off" spellcheck="false" placeholder="很長的一串文字"></label>
+    <button type="button" class="btn primary" data-action="line-connect">連接我的官方帳號</button>
+    <p class="hint">這兩組文字等於你官方帳號的操作權限。它們只會加密保存在後台，不會存在這台裝置，也不會出現在下載檔或提示詞裡。你隨時可以解除連接。</p>`;
+  const sum = applySummary(S());
+  return `${head}
+    <p><span class="st st-done">已連接</span> <b>${esc(s.displayName)}</b> ${esc(s.basicId)}</p>
+    ${s.webhookOk ? '' : `<div class="conflict"><p>${icon('question')} 系統還收不到你官方帳號的訊息。請到 LINE 官方帳號後台 →「設定」→「回應設定」，把 <b>Webhook</b> 打開；若仍不行，可能是 Channel secret 貼錯，請解除連接後重新連接。</p></div>`}
+    <div class="card soft"><p><b>按下「套用」後，會更動你官方帳號的這些內容：</b></p>
+      <ul class="plain"><li>圖文選單：換成 ${sum.pages} 頁 × ${sum.count} 格的新選單（原本的選單會保留，可以回復）</li>
+      <li>自動回覆：客人點選單或輸入下列文字時，由系統回覆（共 ${sum.replies.length} 筆）：${sum.replies.map((r) => `<span class="tag">${esc(r.keyword)}</span>`).join(' ')}</li>
+      <li>加入好友歡迎訊息：${esc(sum.greeting.split('\n')[0])}…</li></ul>
+      <p class="hint">其他文字訊息系統不會回覆，留給你本人回。頭像與狀態消息 LINE 不開放代改，仍要自己上傳。</p></div>
+    <div class="row"><button type="button" class="btn primary" data-action="line-apply">套用到我的官方帳號</button>
+      ${s.canRollback ? '<button type="button" class="btn ghost" data-action="line-rollback">回復上一版選單</button>' : ''}
+      <button type="button" class="link-btn" data-action="line-disconnect">解除連接</button></div>
+    ${s.appliedAt ? `<p class="parse"><span class="ok">上次套用：${esc(new Date(s.appliedAt).toLocaleString('zh-TW', { dateStyle: 'short', timeStyle: 'short' }))}。請用手機打開官方帳號，逐格點選單確認。</span></p>` : ''}
+    <details><summary>套用後，LINE 後台還要做一次的設定</summary><ol class="small-steps">
+      <li>「設定」→「回應設定」：<b>Webhook 開啟</b>。</li>
+      <li>同一頁把「<b>加入好友的歡迎訊息</b>」和「<b>自動回應訊息</b>」關閉，否則客人會收到兩次回覆。</li>
+      <li>「聊天」維持開啟，你才能手動回覆客人。</li></ol></details>`;
+}
+
+async function loadLineStatus() {
+  const box = document.getElementById('lineConnect');
+  if (!box) return;
+  try { lineState = await lineStatus(); lineError = ''; } catch (e) { lineState = null; lineError = e.message; }
+  const again = document.getElementById('lineConnect');
+  if (again) again.innerHTML = lineConnectCard();
+}
+
 function guideTab(pid) {
   const P = PLATFORM_BY_ID[pid];
   const pl = S().platforms[pid];
   const st = statusOf(pid, S());
   const urlField = P.test.urlField;
-  return `<div class="card"><h3>完成狀態</h3><ul class="status-list">${st.map((x) => `<li>${badge(x.status, x.text)}<span>${esc(x.label)}</span></li>`).join('')}</ul>
+  return `${pid === 'lineOA' ? `<div class="card connect-card" id="lineConnect">${lineConnectCard()}</div>` : ''}<div class="card"><h3>完成狀態</h3><ul class="status-list">${st.map((x) => `<li>${badge(x.status, x.text)}<span>${esc(x.label)}</span></li>`).join('')}</ul>
     <p class="hint">「已完成」只代表系統產出素材或你自己確認；APP 不會替你登入、發文或宣稱已串接。</p></div>
     <ol class="guide">${P.guide.map((g, i) => `<li class="card"><div class="g-head"><span class="step-no">${i + 1}</span><h3>${esc(g.title)}</h3></div>
       ${g.dynamic === 'forms' ? formsGuide() : g.dynamic === 'replies' ? repliesGuide() : `<p class="pre">${esc(g.body || guideDynamic(S(), g))}</p>`}
@@ -263,6 +313,7 @@ export function render(root, [pidArg, tabArg]) {
     <div class="panel-body">${content}</div>
   </section>`;
   paintAssets(root);
+  if (pid === 'lineOA' && tab === 'guide') loadLineStatus();
   if (pid === 'website' && tab === 'preview') setWebWidth(390);
 }
 
@@ -302,6 +353,25 @@ export async function onAction(act, el) {
     case 'copy-form-manual': copyText(formManual(s, derive(s))); return true;
     case 'copy-kw': copyText(replyList(s, derive(s))[+el.dataset.i].keyword); return true;
     case 'copy-reply': copyText(replyList(s, derive(s))[+el.dataset.i].reply); return true;
+    case 'line-connect': {
+      const token = document.getElementById('lineToken').value.trim();
+      const secret = document.getElementById('lineSecret').value.trim();
+      if (!token || !secret) { toast('請先貼上 Channel secret 和 Channel access token'); return true; }
+      busyText(el, '連接中…', async () => { lineState = await lineConnect(token, secret); toast(`已連接「${lineState.displayName}」`); });
+      return true;
+    }
+    case 'line-apply':
+      if (!confirm('確定把目前的選單、歡迎訊息與回覆套用到你的 LINE 官方帳號？客人會立刻看到新的選單。')) return true;
+      busyText(el, '套用中，請稍候…', async () => { lineState = await lineApply(s); toast('已套用。請用手機打開官方帳號確認。'); });
+      return true;
+    case 'line-rollback':
+      if (!confirm('確定回復成上一版選單？')) return true;
+      busyText(el, '回復中…', async () => { lineState = await lineRollback(); toast('已回復上一版選單'); });
+      return true;
+    case 'line-disconnect':
+      if (!confirm('確定解除連接？系統會刪除保存的金鑰並停止自動回覆。已上架的選單會留在你的官方帳號。')) return true;
+      busyText(el, '處理中…', async () => { lineState = await lineDisconnect(); toast('已解除連接'); });
+      return true;
     case 'apply-forms': {
       const text = document.getElementById('formResult')?.value || '';
       const r = parseFormResult(text, L);
@@ -344,6 +414,17 @@ export async function onAction(act, el) {
     case 'prompt-keep': { const pr = s.platforms[el.dataset.p].prompt; pr.basis = hash(buildPrompt(s, derive(s), el.dataset.p, pr.extra)); commit(); return true; }
     default: return false;
   }
+}
+
+/** 代設相關動作：顯示處理中，完成後重畫連接卡片；失敗時顯示後台回傳的原因 */
+async function busyText(btn, text, fn) {
+  const label = btn.innerHTML;
+  btn.disabled = true;
+  btn.textContent = text;
+  try { await fn(); lineError = ''; } catch (e) { toast(e.message); }
+  const box = document.getElementById('lineConnect');
+  if (box) box.innerHTML = lineConnectCard();
+  else { btn.disabled = false; btn.innerHTML = label; }
 }
 
 async function busy(btn, fn) {

@@ -98,7 +98,7 @@ export const PLATFORMS = [
       { id: 'forms', kind: 'manual', label: '建立需求表單，網址填回選單入口' },
       { id: 'richmenu', kind: 'manual', label: '上傳圖文選單並設定每格動作' },
       { id: 'replies', kind: 'manual', label: '為文字回覆與留言入口設定自動回應' },
-      { id: 'api', kind: 'api', label: 'Agent 代設八格／雙頁選單（需 Messaging API 與後端，尚未串接）' },
+      { id: 'api', kind: 'connect', label: '系統代設選單與自動回覆（在下方「讓系統代設」連接後使用）' },
     ],
     guide: [
       { title: '建立官方帳號', body: '用你自己的 LINE 帳號登入 LINE 官方帳號管理後台，建立一般帳號。這一步需要本人登入與同意條款，系統無法代辦。', link: 'https://tw.linebiz.com/', check: 'account' },
@@ -169,6 +169,7 @@ export function statusOf(pid, state) {
   return P.checklist.map((it) => {
     if (it.kind === 'system') return { ...it, status: 'done', text: '已完成（系統產出）' };
     if (it.kind === 'api') return { ...it, status: 'none', text: '尚未串接' };
+    if (it.kind === 'connect') return { ...it, status: 'todo', text: '可選用' };
     return ck[it.id] ? { ...it, status: 'done', text: '已完成（本人確認）' } : { ...it, status: 'todo', text: '待本人操作' };
   });
 }

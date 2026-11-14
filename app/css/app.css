@@ -405,3 +405,8 @@ input[readonly] { background: var(--c-bg); color: var(--c-muted); }
 
 /* 檔案選擇按鈕：input 保留在鍵盤焦點順序中，聚焦時外框顯示在按鈕上 */
 .file-btn:focus-within { outline: 3px solid var(--c-accent); outline-offset: 2px; }
+
+/* LINE 代設 */
+.connect-card { border-color: #cfe0fb; }
+.connect-card h3 { display: flex; align-items: center; gap: var(--s2); }
+.connect-card details summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; color: var(--c-primary-ink); font-weight: 600; }

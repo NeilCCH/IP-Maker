@@ -73,6 +73,17 @@ node tests/e2e.test.js
 
 > 舊展示版的 ChatGPT Sites 設定（`.openai/hosting.json`）沒有搬進來，也沒有改動原站點。
 
+## LINE 官方帳號代設
+
+同仁在「LINE 官方帳號 → 設定引導 → 讓系統代設」貼上 Channel secret 與 Channel access token 後，系統可以：
+套用圖文選單（含八格、雙頁切換）、以 Webhook 自動回覆選單關鍵字與加入好友歡迎訊息、回復上一版、解除連接。
+
+- 啟用條件：在 Cloudflare 後台為 Worker 新增**密鑰** `TOKEN_KEY`（至少 16 個字元的隨機字串）。未設定時此功能停用。
+- 金鑰以 AES-GCM 加密後存在 Durable Object，不回傳前端、不存在使用者裝置。停用帳號或解除連接時刪除。
+- 套用流程：檢查 → 建立 → 上傳圖片 → 建立本次專用的切頁代號 → 最後才切換預設選單；失敗時刪除半成品。
+- 仍需本人在 LINE 後台操作：啟用 Messaging API、開啟 Webhook、關閉內建的歡迎訊息與自動回應、上傳頭像。
+- 程式：`worker/line.js`、`app/js/lineconnect.js`。尚未在真實官方帳號驗證。
+
 ## AI 工具提示詞
 
 首頁可選「AI 工具提示詞」。第三步提供六種用途的提示詞（品牌規範、長期設定、AI 生圖、寫貼文文案、簡報與海報、短影音腳本），

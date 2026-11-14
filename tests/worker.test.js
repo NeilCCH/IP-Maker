@@ -211,6 +211,169 @@ function client(base) {
       assert(!errors.length, errors.join(' | '));
     });
 
+    console.log('LINE 代設（對本機的模擬 LINE 伺服器，不接觸真實帳號）');
+    await test('未設定加密金鑰時，代設功能停用', async () => {
+      const c = client(w.base);
+      await c.api('/api/login', { credential: 'test:neo0935@gmail.com' });
+      const st = await c.api('/api/line/status');
+      assert(st.data.enabled === false, JSON.stringify(st.data));
+      assert((await c.api('/api/line/connect', { token: 'x'.repeat(80), secret: 'a'.repeat(32) })).status === 503, '未啟用仍可連接');
+    });
+
+    // ---- 模擬 LINE 伺服器 ----
+    const http = require('http');
+    const nodeCrypto = require('crypto');
+    const GOOD = 'good' + 'x'.repeat(80);
+    const SECRET = '0123456789abcdef0123456789abcdef';
+    const mock = { calls: [], menus: new Map(), aliases: new Map(), def: '', seq: 0, endpoint: '', replies: [], failContentAt: 0, contentCount: 0 };
+    const mockSrv = http.createServer((req, res) => {
+      const chunks = [];
+      req.on('data', (d) => chunks.push(d));
+      req.on('end', async () => {
+        const raw = Buffer.concat(chunks);
+        const u = req.url; const m = req.method;
+        mock.calls.push(`${m} ${u}`);
+        const send = (code, obj = {}) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(obj)); };
+        if (req.headers.authorization !== `Bearer ${GOOD}`) return send(401, { message: 'invalid token' });
+        let body = {};
+        try { body = JSON.parse(raw.toString() || '{}'); } catch { /* 圖片內容 */ }
+        if (m === 'GET' && u === '/v2/bot/info') return send(200, { userId: 'Ubot1', basicId: '@test764', displayName: '測試官方帳號' });
+        if (m === 'PUT' && u === '/v2/bot/channel/webhook/endpoint') { mock.endpoint = body.endpoint; return send(200); }
+        if (m === 'POST' && u === '/v2/bot/channel/webhook/test') {
+          const payload = JSON.stringify({ destination: 'Ubot1', events: [] });
+          const sig = nodeCrypto.createHmac('sha256', SECRET).update(payload).digest('base64');
+          const r = await fetch(mock.endpoint.replace(/^https?:\/\/[^/]+/, mock.workerBase), { method: 'POST', headers: { 'x-line-signature': sig, 'content-type': 'application/json' }, body: payload });
+          return send(200, { success: r.status === 200, statusCode: r.status });
+        }
+        if (m === 'GET' && u === '/v2/bot/user/all/richmenu') return mock.def ? send(200, { richMenuId: mock.def }) : send(404, { message: 'no default' });
+        if (m === 'POST' && u === '/v2/bot/richmenu/validate') return send(200);
+        if (m === 'POST' && u === '/v2/bot/richmenu') { const id = `richmenu-${++mock.seq}`; mock.menus.set(id, body); return send(200, { richMenuId: id }); }
+        let mm;
+        if (m === 'POST' && (mm = u.match(/^\/v2\/bot\/richmenu\/(richmenu-\d+)\/content$/))) { mock.contentCount++; if (mock.failContentAt === mock.contentCount) return send(400, { message: 'image too large' }); return send(200); }
+        if (m === 'POST' && u === '/v2/bot/richmenu/alias') { mock.aliases.set(body.richMenuAliasId, body.richMenuId); return send(200); }
+        if (m === 'DELETE' && (mm = u.match(/^\/v2\/bot\/richmenu\/alias\/(.+)$/))) { mock.aliases.delete(mm[1]); return send(200); }
+        if (m === 'DELETE' && (mm = u.match(/^\/v2\/bot\/richmenu\/(richmenu-\d+)$/))) { mock.menus.delete(mm[1]); return send(200); }
+        if (m === 'POST' && (mm = u.match(/^\/v2\/bot\/user\/all\/richmenu\/(richmenu-\d+)$/))) { if (!mock.menus.has(mm[1])) return send(404); mock.def = mm[1]; return send(200); }
+        if (m === 'DELETE' && u === '/v2/bot/user/all/richmenu') { mock.def = ''; return send(200); }
+        if (m === 'POST' && u === '/v2/bot/message/reply') { mock.replies.push(body); return send(200); }
+        send(404, { message: 'mock: unknown' });
+      });
+    }).listen(8795, '127.0.0.1');
+    const lw = await startWorker(8794, { GOOGLE_CLIENT_ID: 'test-client', ALLOW_TEST_LOGIN: 'yes', TOKEN_KEY: 'local-test-key-0123456789abcdef', LINE_API_BASE: 'http://127.0.0.1:8795', LINE_DATA_BASE: 'http://127.0.0.1:8795' });
+    workers.push(lw);
+    mock.workerBase = lw.base;
+    const me = client(lw.base);
+    await me.api('/api/login', { credential: 'test:neo0935@gmail.com' });
+    const img = Buffer.alloc(2000, 7).toString('base64');
+    const menuBody = (rel, p, pages) => ({ size: { width: 2500, height: 1686 }, selected: true, name: 't', chatBarText: '我的服務', areas: [
+      { bounds: { x: 0, y: 200, width: 2500, height: 1486 }, action: { type: 'message', label: '認識我', text: '認識我' } },
+      ...(pages === 2 ? [0, 1].map((t) => ({ bounds: { x: t * 1250, y: 0, width: 1250, height: 200 }, action: { type: 'richmenuswitch', label: `頁${t + 1}`, richMenuAliasId: `bs-${rel}-p${t + 1}`, data: `page=${t + 1}` } })) : []),
+    ] });
+    const applyBody = (rel, pages = 2) => ({ rel, pages: Array.from({ length: pages }, (_, p) => ({ body: menuBody(rel, p, pages), image: img, mime: 'image/png' })), replies: [{ keyword: '認識我', reply: '我是測試顧問' }], greeting: '歡迎加入' });
+    const hookPost = (payload, secret = SECRET, hookUrl = mock.endpoint) => {
+      const text = JSON.stringify(payload);
+      return fetch(hookUrl.replace(/^https?:\/\/[^/]+/, lw.base), { method: 'POST', headers: { 'x-line-signature': nodeCrypto.createHmac('sha256', secret).update(text).digest('base64'), 'content-type': 'application/json' }, body: text });
+    };
+
+    await test('連接：金鑰錯誤被拒；正確時取得帳號資訊並通過 Webhook 測試；回應不含金鑰', async () => {
+      assert((await me.api('/api/line/status')).data.enabled === true, '功能未啟用');
+      assert((await me.api('/api/line/connect', { token: 'bad' + 'y'.repeat(80), secret: SECRET })).status === 400, '錯誤的 token 被接受');
+      assert((await me.api('/api/line/connect', { token: GOOD, secret: 'short' })).status === 400, '格式錯誤的 secret 被接受');
+      const r = await me.api('/api/line/connect', { token: GOOD, secret: SECRET });
+      assert(r.status === 200 && r.data.connected && r.data.basicId === '@test764' && r.data.webhookOk === true, JSON.stringify(r.data));
+      assert(/\/api\/line\/webhook\/[A-Za-z0-9_-]{20,}$/.test(mock.endpoint), `Webhook 網址 ${mock.endpoint}`);
+      const all = JSON.stringify(r.data) + JSON.stringify((await me.api('/api/line/status')).data);
+      assert(!all.includes(GOOD) && !all.includes(SECRET) && !/token_enc|secret_enc/.test(all), '回應洩漏金鑰');
+    });
+    await test('套用雙頁選單：全部建好才切換預設；建立這次專用的切頁代號', async () => {
+      const r = await me.api('/api/line/apply', applyBody('rel1'));
+      assert(r.status === 200 && r.data.pages === 2 && r.data.replies === 1, JSON.stringify(r.data));
+      assert(mock.def === 'richmenu-1' && mock.aliases.get('bs-rel1-p1') === 'richmenu-1' && mock.aliases.get('bs-rel1-p2') === 'richmenu-2', '選單或代號不正確');
+      const iDef = mock.calls.lastIndexOf('POST /v2/bot/user/all/richmenu/richmenu-1');
+      assert(iDef === mock.calls.length - 1, '切換預設不是最後一步');
+    });
+    await test('套用失敗（第二頁圖片上傳失敗）：清除半成品，原選單不變', async () => {
+      mock.contentCount = 0; mock.failContentAt = 2;
+      const r = await me.api('/api/line/apply', applyBody('rel2'));
+      mock.failContentAt = 0;
+      assert(r.status === 502 && /原本的選單沒有被更動/.test(r.data.error), JSON.stringify(r.data));
+      assert(mock.def === 'richmenu-1' && mock.menus.size === 2 && !mock.aliases.has('bs-rel2-p1'), `半成品未清除 ${[...mock.menus.keys()]}`);
+    });
+    await test('惡意或格式錯誤的選單設定被拒絕（不送到 LINE）', async () => {
+      const n = mock.calls.length;
+      const bad1 = applyBody('rel3'); bad1.pages[0].body.areas[0].action = { type: 'uri', label: 'x', uri: 'javascript:alert(1)' };
+      const bad2 = applyBody('rel3'); bad2.pages[0].body.areas[1].action.richMenuAliasId = 'someone-elses-alias';
+      const bad3 = applyBody('REL!');
+      for (const b of [bad1, bad2, bad3]) assert((await me.api('/api/line/apply', b)).status === 400, '格式錯誤的設定被接受');
+      assert(mock.calls.length === n, '錯誤設定仍呼叫了 LINE');
+    });
+    await test('Webhook：簽章正確才處理；關鍵字回覆、加好友歡迎詞、其他訊息不回', async () => {
+      mock.replies = [];
+      assert((await hookPost({ destination: 'Ubot1', events: [{ type: 'message', replyToken: 'r1', message: { type: 'text', text: ' 認識我 ' } }] })).status === 200, '正確簽章被拒');
+      assert((await hookPost({ destination: 'Ubot1', events: [{ type: 'follow', replyToken: 'r2' }] })).status === 200, 'follow 失敗');
+      await hookPost({ destination: 'Ubot1', events: [{ type: 'message', replyToken: 'r3', message: { type: 'text', text: '我想問別的' } }] });
+      assert(mock.replies.length === 2 && mock.replies[0].messages[0].text === '我是測試顧問' && mock.replies[1].messages[0].text === '歡迎加入', JSON.stringify(mock.replies));
+      assert((await hookPost({ destination: 'Ubot1', events: [] }, 'f'.repeat(32))).status === 401, '錯誤簽章被接受');
+      assert((await hookPost({ destination: 'Uother', events: [] })).status === 400, '其他帳號的訊息被接受');
+      assert((await hookPost({ events: [] }, SECRET, lw.base + '/api/line/webhook/' + 'z'.repeat(32))).status === 404, '不存在的 Webhook 有回應');
+    });
+    await test('再次套用後可回復上一版；更早的選單會被清除', async () => {
+      const r2 = await me.api('/api/line/apply', applyBody('rel4', 1));
+      assert(r2.status === 200 && mock.def === 'richmenu-5', `${r2.status} ${mock.def}`);
+      assert(mock.menus.has('richmenu-1'), '上一版選單被提早刪除');
+      const rb = await me.api('/api/line/rollback');
+      assert(rb.status === 200 && mock.def === 'richmenu-1' && !mock.menus.has('richmenu-5'), `${rb.status} ${mock.def} ${[...mock.menus.keys()]}`);
+    });
+    await test('畫面操作：貼上金鑰連接 → 確認內容 → 套用，LINE 端收到新選單與回覆設定', async () => {
+      await me.api('/api/line/disconnect');
+      const b = await chromium.launch();
+      const page = await (await b.newContext()).newPage();
+      const errors = [];
+      page.on('pageerror', (e) => errors.push(e.message));
+      page.on('dialog', (d) => d.accept());
+      await page.route('https://accounts.google.com/**', (r) => r.fulfill({ status: 200, contentType: 'text/javascript', body: '' }));
+      await page.goto(lw.base + '/gate/');
+      await page.evaluate(() => fetch('/api/login', { method: 'POST', headers: { 'content-type': 'application/json', 'x-brand-studio': '1' }, body: JSON.stringify({ credential: 'test:neo0935@gmail.com' }) }));
+      await page.goto(lw.base + '/');
+      await page.evaluate(async () => { const m = await import('/js/model.js'); localStorage.setItem('brand-studio-v2', JSON.stringify(m.sampleHengYuan())); });
+      await page.goto(lw.base + '/#/results/lineOA/guide');
+      await page.reload();
+      await page.waitForSelector('#lineSecret');
+      assert((await page.getAttribute('#lineToken', 'type')) === 'password', '金鑰欄位不是密碼欄位');
+      await page.fill('#lineSecret', SECRET);
+      await page.fill('#lineToken', GOOD);
+      await page.click('[data-action="line-connect"]');
+      await page.waitForSelector('#lineConnect .st-done');
+      assert((await page.textContent('#lineConnect')).includes('測試官方帳號'), '沒有顯示已連接的帳號');
+      const stored = await page.evaluate(() => JSON.stringify(localStorage));
+      assert(!stored.includes(GOOD) && !stored.includes(SECRET), '金鑰被存進裝置');
+      const before = mock.def;
+      await page.click('[data-action="line-apply"]');
+      await page.waitForSelector('#lineConnect .parse .ok', { timeout: 60000 });
+      assert(mock.def && mock.def !== before, `預設選單沒有更新：${mock.def}`);
+      const menu = mock.menus.get(mock.def);
+      assert(menu.areas.length === 8 && menu.areas[0].action.type === 'message', `選單內容不正確：${menu.areas.length}`);
+      mock.replies = [];
+      await hookPost({ destination: 'Ubot1', events: [{ type: 'message', replyToken: 'u1', message: { type: 'text', text: menu.areas[0].action.text } }] });
+      assert(mock.replies.length === 1 && mock.replies[0].messages[0].text.length > 5, '點選單第一格沒有得到回覆');
+      await b.close();
+      assert(!errors.length, errors.join(' | '));
+    });
+    await test('權限：未通過審核不能使用；別人不能連接同一個官方帳號；解除連接後 Webhook 失效', async () => {
+      const other = client(lw.base);
+      await other.api('/api/login', { credential: 'test:other@x.com' });
+      assert((await other.api('/api/line/status')).status === 403, '未審核者可使用');
+      await other.api('/api/apply', { unit: 'a', division: 'b', title: 'c', name: 'd' });
+      await me.api('/api/admin/decide', { email: 'other@x.com', status: 'approved' });
+      const dup = await other.api('/api/line/connect', { token: GOOD, secret: SECRET });
+      assert(dup.status === 400 && /另一個使用者/.test(dup.data.error), JSON.stringify(dup.data));
+      const hookUrl = mock.endpoint;
+      assert((await me.api('/api/line/disconnect')).data.connected === false, '解除連接失敗');
+      assert((await hookPost({ destination: 'Ubot1', events: [] }, SECRET, hookUrl)).status === 404, '解除連接後 Webhook 仍有效');
+      assert((await me.api('/api/line/apply', applyBody('rel5'))).status === 400, '未連接仍可套用');
+    });
+    mockSrv.close();
+
     console.log('正式設定（沒有測試登入）');
     const prod = await startWorker(8793, { GOOGLE_CLIENT_ID: 'test-client' });
     workers.push(prod);

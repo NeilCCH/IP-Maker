@@ -1,5 +1,5 @@
 // Service worker：預先快取全部檔案，離線可用；新版本等使用者按「更新」才切換，避免編輯到一半被重新整理。
-const VERSION = 'brand-studio-2.10.0';
+const VERSION = 'brand-studio-2.11.0';
 const FILES = [
   './',
   './index.html',
@@ -24,6 +24,7 @@ const FILES = [
   './js/entries.js',
   './js/backup.js',
   './js/brandguide.js',
+  './js/lineconnect.js',
   './js/auth.js',
   './js/views/admin.js',
   './js/data/questions.js',

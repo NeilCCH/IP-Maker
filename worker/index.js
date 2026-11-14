@@ -3,6 +3,7 @@
 // 在 GOOGLE_CLIENT_ID 尚未設定前，門禁不啟用（維持公開使用），避免網站被整個鎖住。
 import { DurableObject } from 'cloudflare:workers';
 import { verifyIdToken } from './jwt.js';
+import { lineApi, lineWebhook } from './line.js';
 
 const SESSION_DAYS = 30;
 const COOKIE = '__Host-bs_session';
@@ -45,6 +46,10 @@ export class Registry extends DurableObject {
       email TEXT PRIMARY KEY, google_name TEXT, unit TEXT, division TEXT, title TEXT, name TEXT,
       status TEXT NOT NULL DEFAULT 'none', applied_at TEXT, decided_at TEXT, decided_by TEXT, created_at TEXT)`);
     this.sql.exec(`CREATE TABLE IF NOT EXISTS sessions (hash TEXT PRIMARY KEY, email TEXT NOT NULL, expires INTEGER NOT NULL)`);
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS line_accounts (
+      email TEXT PRIMARY KEY, hook TEXT UNIQUE, bot_user_id TEXT, basic_id TEXT, display_name TEXT,
+      token_enc TEXT, secret_enc TEXT, webhook_ok INTEGER DEFAULT 0, replies TEXT, greeting TEXT,
+      menus_current TEXT, menus_prev TEXT, prev_default TEXT, connected_at TEXT, applied_at TEXT)`);
   }
 
   user(email) {
@@ -89,10 +94,21 @@ export class Registry extends DurableObject {
     return this.sql.exec("SELECT email, google_name, unit, division, title, name, status, applied_at, decided_at, decided_by FROM users ORDER BY CASE status WHEN 'pending' THEN 0 WHEN 'none' THEN 1 WHEN 'approved' THEN 2 ELSE 3 END, applied_at DESC").toArray();
   }
 
+  // ----- LINE 官方帳號連接資料（金鑰為加密後的字串） -----
+  lineGet(email) { return this.sql.exec('SELECT * FROM line_accounts WHERE email = ?', email).toArray()[0] || null; }
+  lineByHook(hook) { return this.sql.exec('SELECT * FROM line_accounts WHERE hook = ?', hook).toArray()[0] || null; }
+  lineByBot(id) { return this.sql.exec('SELECT * FROM line_accounts WHERE bot_user_id = ?', id).toArray()[0] || null; }
+  lineSave(email, fields) {
+    const COLS = ['hook', 'bot_user_id', 'basic_id', 'display_name', 'token_enc', 'secret_enc', 'webhook_ok', 'replies', 'greeting', 'menus_current', 'menus_prev', 'prev_default', 'connected_at', 'applied_at'];
+    if (!this.lineGet(email)) this.sql.exec('INSERT INTO line_accounts (email) VALUES (?)', email);
+    for (const [k, v] of Object.entries(fields)) if (COLS.includes(k)) this.sql.exec(`UPDATE line_accounts SET ${k} = ? WHERE email = ?`, v, email);
+  }
+  lineDelete(email) { this.sql.exec('DELETE FROM line_accounts WHERE email = ?', email); }
+
   decide(email, status, by) {
     if (!this.user(email)) return null;
     this.sql.exec('UPDATE users SET status = ?, decided_at = ?, decided_by = ? WHERE email = ?', status, new Date().toISOString(), by, email);
-    if (status !== 'approved') this.sql.exec('DELETE FROM sessions WHERE email = ?', email); // 撤銷時立即登出
+    if (status !== 'approved') { this.sql.exec('DELETE FROM sessions WHERE email = ?', email); this.lineDelete(email); } // 撤銷時立即登出，並刪除保存的 LINE 金鑰
     return this.user(email);
   }
 }
@@ -131,6 +147,8 @@ function cleanFields(body) {
 async function api(req, env, url) {
   const path = url.pathname;
   if (path === '/api/config') return json({ authEnabled: authEnabled(env), googleClientId: authEnabled(env) ? env.GOOGLE_CLIENT_ID : '' });
+  // LINE Webhook：公開端點，由 LINE 的簽章驗證來源
+  if (path.startsWith('/api/line/webhook/')) return req.method === 'POST' ? lineWebhook(req, env, path.slice('/api/line/webhook/'.length), registry(env)) : json({ error: 'not found' }, 404);
   if (!authEnabled(env)) return json({ authEnabled: false, status: 'open' });
 
   if (path === '/api/me') {
@@ -167,6 +185,12 @@ async function api(req, env, url) {
     const { fields, error } = cleanFields(body);
     if (error) return json({ error }, 400);
     return json(publicUser(await registry(env).apply(me.email, fields), env));
+  }
+
+  if (path.startsWith('/api/line/')) {
+    if (me.status !== 'approved') return json({ error: '需要通過審核' }, 403);
+    const r = await lineApi(path, body, me, env, registry(env), url.origin);
+    return json(r.body, r.status);
   }
 
   if (!adminEmails(env).includes(me.email)) return json({ error: '只有管理者可以使用' }, 403);
